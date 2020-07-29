@@ -35,6 +35,10 @@ You can [find the briefing pack here with more on the methodology](https://docs.
 
 ## Scripts and code
 
+
+insolvency_master.Rmd: R script for collating Gazette data and joining to Companies House for analysis
+
+
 ## Partner usage
 
 Stories written by local news partners using this data release included:
