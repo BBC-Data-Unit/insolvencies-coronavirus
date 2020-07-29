@@ -58,5 +58,6 @@ Stories written by local news partners using this data release included:
 * Peterborough Matters: [How lockdown has impacted firms in Peterborough](https://www.peterboroughmatters.co.uk/local-news/peterborough-businesses-impacted-by-lockdown-15021) *26 July 2020*
 * SpiritFM: [More businesses go under in West Sussex during coronavirus lockdown](https://www.spiritfm.net/news/sussex-news/3151746/more-businesses-go-under-in-west-sussex-during-coronavirus-lockdown/) *29 July 2020*
 * The Scotland Herald: [Experts warn coronavirus crisis is creating 'zombie' firms](https://www.heraldscotland.com/business_hq/18613732.fall-insolvencies-amid-virus-crisis-masks-problem-zombie-companies/) *29 July 2020*
+* Worcester News: [232 new businesses registered in Worcester during lockdown](https://www.worcesternews.co.uk/news/18608865.232-new-businesses-registered-worcester-lockdown/) *27 July 2020*
 * Yorkshire Live: [The incredible stats that show the true economic impact of Covid-19 on Kirklees business so far](https://www.examinerlive.co.uk/news/west-yorkshire-news/incredible-stats-show-true-economic-18663688) *28 July 2020*
 
