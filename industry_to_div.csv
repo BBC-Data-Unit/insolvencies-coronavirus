@@ -1,0 +1,90 @@
+division_bottom,division_top,industry_desc
+1,3,"Agriculture, forestry & fishing"
+2,3,"Agriculture, forestry & fishing"
+3,3,"Agriculture, forestry & fishing"
+5,39,Production
+6,39,Production
+7,39,Production
+8,39,Production
+9,39,Production
+10,39,Production
+11,39,Production
+12,39,Production
+13,39,Production
+14,39,Production
+15,39,Production
+16,39,Production
+17,39,Production
+18,39,Production
+19,39,Production
+20,39,Production
+21,39,Production
+22,39,Production
+23,39,Production
+24,39,Production
+25,39,Production
+26,39,Production
+27,39,Production
+28,39,Production
+29,39,Production
+30,39,Production
+31,39,Production
+32,39,Production
+33,39,Production
+34,39,Production
+35,39,Production
+36,39,Production
+37,39,Production
+38,39,Production
+39,39,Production
+41,43,Construction
+42,43,Construction
+43,43,Construction
+45,45,Motor trades
+46,46,Wholesale
+47,47,Retail
+49,53,Transport & Storage (inc. postal)
+50,53,Transport & Storage (inc. postal)
+51,53,Transport & Storage (inc. postal)
+52,53,Transport & Storage (inc. postal)
+53,53,Transport & Storage (inc. postal)
+55,56,Accommodation & food services
+56,56,Accommodation & food services
+58,63,Information & communication
+59,63,Information & communication
+60,63,Information & communication
+61,63,Information & communication
+62,63,Information & communication
+63,63,Information & communication
+64,66,Finance & insurance
+65,66,Finance & insurance
+66,66,Finance & insurance
+68,68,Property
+69,75,"Professional, scientific & technical"
+70,75,"Professional, scientific & technical"
+71,75,"Professional, scientific & technical"
+72,75,"Professional, scientific & technical"
+73,75,"Professional, scientific & technical"
+74,75,"Professional, scientific & technical"
+75,75,"Professional, scientific & technical"
+77,82,Business administration & support services
+78,82,Business administration & support services
+79,82,Business administration & support services
+80,82,Business administration & support services
+81,82,Business administration & support services
+82,82,Business administration & support services
+84,84,Public administration & defence
+85,85,Education
+86,88,Health
+87,88,Health
+88,88,Health
+90,99,"Arts, entertainment, recreation & other services"
+91,99,"Arts, entertainment, recreation & other services"
+92,99,"Arts, entertainment, recreation & other services"
+93,99,"Arts, entertainment, recreation & other services"
+94,99,"Arts, entertainment, recreation & other services"
+95,99,"Arts, entertainment, recreation & other services"
+96,99,"Arts, entertainment, recreation & other services"
+97,99,"Arts, entertainment, recreation & other services"
+98,99,"Arts, entertainment, recreation & other services"
+99,99,"Arts, entertainment, recreation & other services"

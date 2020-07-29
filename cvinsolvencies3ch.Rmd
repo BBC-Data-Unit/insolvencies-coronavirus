@@ -1,0 +1,331 @@
+---
+title: "Insolvencies - Companies House"
+output: html_notebook
+---
+
+# Insolvencies - Companies House
+
+In two previous notebooks we explored scraped data on insolvency notices. Now we turn our attention to Companies House as a second source of data on the same issue. 
+
+At [this page](http://download.companieshouse.gov.uk/en_output.html) you can download a snapshot of all live companies. 
+
+This is the snapshot for 01/04/2020, split into 6 files.
+
+It's big.
+
+```{r import and combine CH data}
+#Import one dataset
+chsnapshot010420 <- rio::import("BasicCompanyData-2020-04-01-part1_6.csv")
+#Create a list of CSV files that match the pattern
+csvfiles <- list.files(pattern="BasicCompanyData-2020-04-01-part[2-6]_6.csv")
+#Loop through to create a combined file
+for (i in csvfiles){
+  onefile <- rio::import(i)
+  chsnapshot010420 <- rbind(chsnapshot010420,onefile)
+}
+```
+
+This is the snapshot for 01/06/2020, split into 6 files.
+
+```{r import and combine CH data June}
+#Import one dataset
+chsnapshot010620 <- rio::import("BasicCompanyData-2020-06-01-part1_6.csv")
+#Create a list of CSV files that match the pattern
+csvfiles <- list.files(pattern="BasicCompanyData-2020-06-01-part[2-6]_6.csv")
+#Loop through to create a combined file
+for (i in csvfiles){
+  onefile <- rio::import(i)
+  chsnapshot010620 <- rbind(chsnapshot010620,onefile)
+}
+
+#Reduce the file 
+chsnapshot010620 <- chsnapshot010620[c(1:2,27:30)]
+write.csv(chsnapshot010620,"chsnapshot010620.csv")
+```
+
+Let's just store 100 to test some techniques with.
+
+```{r store first 100}
+chdata100 <- head(onefile, 100)
+chdata100
+```
+
+There are 4 columns containing SIC codes (because some companies have as many as 4 SIC codes). Let's check the 4th:
+
+```{r check sic values}
+table(chdata100$SICCode.SicText_4)
+```
+
+98 companies don't have a fourth SIC code, but two do.
+
+We want a simplified data frame which just contains company name and number (for matching) as well as each SIC code it's associated with.
+
+```{r check SIC code colnames}
+colnames(chdata100)[27:30]
+```
+
+```{r create reduced data frame}
+chdata100sic <- chdata100[c(1:2,27:30)]
+```
+
+## Create a long data frame
+
+We need `tidyr` to reshape the data and `dplyr` to filter it:
+
+```{r install tidyr and dplyr}
+library("tidyr")
+library("dplyr")
+```
+
+Then we reshape it using `gather` and `filter` out rows without any SIC code:
+
+```{r gather sic codes}
+chdata100long <- chdata100sic %>% 
+  gather(sicfield, siccode, SICCode.SicText_1:SICCode.SicText_4) %>%
+  filter(siccode != "")
+#Check how many of each type there are
+table(chdata100long$sicfield)
+```
+
+So we can see only 15 companies have more than one SIC code, 6 have more than two and there's the two that have 4 SIC codes.
+
+Let's have a look at the SIC codes:
+
+```{r head siccodes}
+head(chdata100long$siccode)
+```
+
+We need to split the code from the description.
+
+
+```{r split sic}
+chdata100long <- chdata100long %>%
+  tidyr::separate(col=siccode, into=c("siccode","sicdesc"), sep=" - ")
+head(chdata100long)
+```
+
+## Merge with industry division classification
+
+We need the first two digits for a broader industry 'division':
+
+```{r substr sic division}
+chdata100long$sicdiv <- substr(chdata100long$siccode,1,2)
+```
+
+Now we need to import some data to match with those:
+
+```{r import sic division names} 
+sicdivs <- rio::import("sic2007_division_group_class.xls", sheet = 2)
+#rename
+colnames(sicdivs) <- c("sicdiv","divisionname")
+write.csv(sicdivs,"sicdivs.csv")
+```
+
+And merge it
+
+```{r merge sic divs}
+sicmerged <- merge(chdata100long, sicdivs)
+```
+
+There's more detailed categories within each division too - we import those here:
+
+```{r division class import}
+#This code is by Anna Khoo
+sic_division_group_class <- readxl::read_excel("sic2007_division_group_class.xls")
+
+ 
+
+sic_division_group_class <- zoo::na.locf(sic_division_group_class)
+
+sic_division_group_class <- distinct(sic_division_group_class)
+
+ 
+
+sic_division_group_class <- sic_division_group_class %>%
+
+  select(1:8)
+
+names(sic_division_group_class) <- c("sector_section", "section_desc", "sector_division","division_desc",
+
+                                     "sector_group", "group_desc", "sector_class", "class_desc")
+
+```
+
+The import doesn't match up all the columns quite right, but we only need them in pairs (where the match is correct) so we can work with those.
+
+First we need to remove periods so they match:
+
+```{r remove periods}
+#Replace . with nothing
+sic_division_group_class$sector_group<- gsub("[.]","",sic_division_group_class$sector_group)
+sic_division_group_class$sector_class<- gsub("[.]","",sic_division_group_class$sector_class)
+```
+
+Then split out:
+
+```{r create sectorgroup and class dfs}
+colnames(sic_division_group_class)
+sicgroups <- sic_division_group_class[5:6]
+sicclasses <- sic_division_group_class[7:8]
+```
+
+Maybe we can create a cleaner combined dataset (which will also speed up merging) from these:
+
+
+```{r create combined }
+#Copy classes dataset to start with
+sicdivclassgroup <- sicclasses
+#Extract first 3 digits (group) and 2 digits (division)
+sicdivclassgroup$sector_group <- substr(sicclasses$sector_class,1,3)
+sicdivclassgroup$sicdiv <- substr(sicclasses$sector_class,1,2)
+#Merge descriptions of divs and groups
+sicdivclassgroup <- merge(sicdivclassgroup, sicdivs)
+sicdivclassgroup <- merge(sicdivclassgroup, sicgroups)
+#Remove cols as we only need to match on one
+sicdivclassgroup$sicdiv <- NULL
+sicdivclassgroup$sector_group <- NULL
+```
+
+
+
+
+Let's extract the same digits in the CH data so we can merge:
+
+```{r extract first 3 and 4 digits of SIC codes}
+chdata100long$sector_group <- substr(chdata100long$siccode,1,3)
+chdata100long$sector_class <- substr(chdata100long$siccode,1,4)
+```
+
+Now to merge those - let's repeat the code from earlier where we grabbed the divisions, now we also have the other digits to add, and then merge the other data
+
+```{r merge group and class}
+sicmerged <- merge(chdata100long, sicdivs)
+sicmerged <- merge(sicmerged, sicgroups)
+sicmerged <- merge(sicmerged, sicclasses)
+```
+
+## Create a function to do all of this
+
+We now have a dataset which has:
+
+* A row for each SIC code-company combination, allowing us to calculate what percentage of companies fall within a particular code (e.g. out of those 100 companies 30% are in sector B)
+* Broader categories added in so we can perform that calculation not just by specific SIC code but SIC division, group and class too
+
+But this was a 100-row sample, not the full 4.5m-row snapshot or even the 257,000-row part.
+
+Let's create a function that combines all the steps and can be run on any dataset.
+
+First we install a package to measure time elapsed:
+
+```{r install tictoc}
+install.packages("tictoc")
+library(tictoc)
+```
+Then we create a function:
+
+```{r create function}
+chsnapshotcleaner <- function(df){
+  print("running chsnapshotcleaner")
+  #Remove unnecessary columns
+  df <- df[c(1:2,27:30)]
+  #wide to long - combine 4 SIC code fields using gather()
+  #filter out rows with no SIC code
+  #split out code from description
+  df <- df %>% 
+    tidyr::gather(sicfield, siccode, SICCode.SicText_1:SICCode.SicText_4) %>%
+    dplyr::filter(siccode != "") %>%
+    tidyr::separate(col=siccode, into=c("siccode","sicdesc"), sep=" - ")
+  #create new columns containing just the first 2, 3 and 4 characters of code
+  df$sicdiv <- substr(df$siccode,1,2)
+  df$sector_group <- substr(df$siccode,1,3)
+  df$sector_class <- substr(df$siccode,1,4)
+  #merge with descriptions
+  df <- merge(df, sicdivclassgroup)
+  #return the resulting dataframe to whatever called the function
+  return(df)
+}
+```
+
+
+I tried the code above 3 times with three different approaches in the function:
+* With 3 merges against 3 simple datasets it took 71.9 seconds (using a test df of 257,000)
+* With 1 merge against a more complex dataset (it had all 3 codes with the same column names as the df) it took 112.4 secs
+* With 1 merge against that dataset with 2 of the 3 codes removed so it only matched against one, it took 57.6 secs
+
+```{r run function and store time taken}
+#Start tictoc timer
+tictoc::tic("start")
+#Run function
+dftest <- chsnapshotcleaner(onefile)
+#Stop timer and show time
+tictoc::toc()
+```
+
+Trying it on the full dataset freezes R, however - DON'T run this code:
+
+```{r run function on combined data, eval=FALSE, include=FALSE}
+#Start tictoc timer
+tictoc::tic("start")
+#Run function
+chsnapshot010420.sics <- chsnapshotcleaner(chsnapshot010420)
+#Stop timer and show time
+tictoc::toc()
+```
+
+This is another approach - reducing file sizes first:
+
+```{r smaller import}
+#Import one dataset
+chsnapshot010420 <- rio::import("BasicCompanyData-2020-04-01-part1_6.csv")
+chsnapshot010420 <- chsnapshot010420[c(1:2,27:30)]
+#Create a list of CSV files that match the pattern
+csvfiles <- list.files(pattern="BasicCompanyData-2020-04-01-part[2-6]_6.csv")
+#Loop through to create a combined file
+for (i in csvfiles){
+  onefile <- rio::import(i)
+  onefile <- onefile[c(1:2,27:30)]
+  chsnapshot010420 <- rbind(chsnapshot010420,onefile)
+}
+```
+
+
+Recreate the function with the column-removing line commented out.
+
+```{r}
+chsnapshotcleaner <- function(df){
+  print("running chsnapshotcleaner")
+  #Remove unnecessary columns - commented out as it's now done before running this function
+  df <- df[c(1:2,27:30)]
+  #wide to long - combine 4 SIC code fields using gather()
+  #filter out rows with no SIC code
+  #split out code from description
+  df <- df %>% 
+    tidyr::gather(sicfield, siccode, SICCode.SicText_1:SICCode.SicText_4) %>%
+    dplyr::filter(siccode != "") %>%
+    tidyr::separate(col=siccode, into=c("siccode","sicdesc"), sep=" - ")
+  #create new columns containing just the first 2, 3 and 4 characters of code
+  df$sicdiv <- substr(df$siccode,1,2)
+  df$sector_group <- substr(df$siccode,1,3)
+  df$sector_class <- substr(df$siccode,1,4)
+  #merge with descriptions
+  df <- merge(df, sicdivclassgroup)
+  #return the resulting dataframe to whatever called the function
+  return(df)
+}
+```
+
+And try again:
+
+```{r import with sics}
+#Import one dataset
+chsnapshot010420b <- rio::import("BasicCompanyData-2020-04-01-part1_6.csv")
+chsnapshot010420c <- chsnapshotcleaner(chsnapshot010420b)
+#Create a list of CSV files that match the pattern
+csvfiles <- list.files(pattern="BasicCompanyData-2020-04-01-part[2-6]_6.csv")
+#Loop through to create a combined file
+for (i in csvfiles){
+  onefilec <- rio::import(i)
+  onefilec <- chsnapshotcleaner(onefilec)
+  chsnapshot010420c <- rbind(chsnapshot010420c,onefilec)
+}
+```

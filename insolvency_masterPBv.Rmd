@@ -1,0 +1,547 @@
+---
+title: "Insolvency"
+output: html_document
+---
+
+```{r setup}
+.libPaths("D:/R/Libraries")
+pacman::p_load(tidyverse, zoo, ggplot2, janitor, rio, data.table, reticulate)
+```
+```{python test}
+print(1+3)
+```
+
+## 1. Collate gazette scrape data
+
+Import and clean gazette scrape info
+
+
+```{r gazette scrape data import}
+filenames <- list.files(path="Gazette_scrape_new/", pattern="*.csv", full.names=TRUE)
+gazette_1 <- rbindlist(lapply(filenames,fread)) %>% 
+  remove_empty("cols")
+```
+
+Then add in older scrape, which needs to match columns first
+
+```{r echo=FALSE}
+filenames <-list.files(path="Gazette notices scrape/", pattern="*.tsv", full.names=TRUE)
+#set EOL to ¬ to avoid parsing issues
+gazette_2 <-  do.call(rbind, lapply(filenames, function(x) read_tsv(x, col_names = TRUE, quote = "¬")))
+
+gazette_2 <- gazette_2 %>% 
+  filter(is.na(Error)) %>% 
+  remove_empty("cols")
+```
+
+If that throws an error, import the results here:
+
+```{r}
+gazette_2b <- rio::import("gazette_2.csv")
+gazette_2 <- gazette_2 %>% 
+  filter(is.na(Error)) %>% 
+  remove_empty("cols")
+```
+
+
+# Tidying up and collating scrape datasets
+
+We need to deduplicate on notice url just in case, dob isn't useful, noticecode will need cleaning before it's useful to extract the code as gazette_2 not as tidy, "persdetail" can come out for the moment too (though could be useful for personal insolvency?)
+```{r bind gazette scrape data}
+gazette_1 <- gazette_1 %>% 
+  select(-V1, -dob,-persdetail)
+gazette_2 <- gazette_2 %>% 
+  select("address"="Regoffice","companyname"="Name", "compnum"="Companynum","noticecategory"="Category",
+         "noticecode"="Code", "noticetype"="Noticetype", "pubdate"="Pubdate","typeofliq"="Liquidationtype","url"="Source Url")
+
+gazette <- rbind(gazette_1, gazette_2)
+#clean env
+rm(gazette_1, gazette_2)
+
+gazette <- gazette[!duplicated(gazette$url),]
+
+```
+
+# Clean and filter to just insolvencies
+
+That dataset has quite a lot of non-entries. But we're only interested in liquidations.
+
+
+```{r gazette clean, filter to liquidations}
+gazette$compnum <- gsub("NO DATA",NA,gazette$compnum)
+gazette <- gazette %>%
+  remove_constant() %>% 
+  filter(!is.na(compnum))
+
+#subset of notices for liquidation only, here we'll just do 'Appointment of Liquidators' but a custom subset here would allow multiple types
+#liquidations <- gazette %>% 
+  #filter(noticetype=="Appointment of Liquidators")
+
+insolvency_notices <- (c("Appointment of Liquidators","Appointment of Administrators", "Resolutions for Winding Up","Resolutions for Winding-Up"))
+
+liquidations <- gazette %>% 
+  filter(noticetype %in% insolvency_notices)
+
+#the deduplicate on company number to preserve only one entry per company:
+
+liquidations <- liquidations[!duplicated(liquidations$compnum),]
+```
+or what's to stop us just doing insolvency??
+
+```{r don't run: thoughts on filtering by multiple notice types - incomplete}
+
+#option one:
+
+insolvency_notices <- c("Bankruptcy","Winding-Up","Liquidat","Appointment of Administrators","Meetings of Creditors", "Resolutions for Winding Up") 
+  
+liquidations <- gazette %>% 
+  filter(!str_detect(noticetype, paste(insolvency_notices, collapse="|")))
+#option two:
+
+
+insolvency <- gazette %>%
+  filter(str_detect(noticecategory, "Insolvency"))
+
+#there's also an odd one for overseas management
+insolvency <- insolvency %>% 
+  filter(!noticetype=="Overseas Territories and Dependencies")
+
+insolvency <- insolvency[!duplicated(insolvency$compnum),]
+
+unique(insolvency$noticecategory)
+
+#hmm that has quite a lot of junk in there, maybe we do need:
+insolvency_notices <- as.data.frame(c("Winding-Up Orders","Resolutions for Winding-up", "Notices to Creditors",
+                                      "Appointment of     Administrators","Appointment of Liquidators","Resolutions for Winding Up"))
+
+liquidations <- 
+
+unique(liquidations$noticetype)
+unique(insolvency$noticecategory)
+```
+
+
+That's quite small, but we'll leave it there for now.
+```{r gazette split out dates}
+liquidations <- liquidations %>%
+  tidyr::separate(col=pubdate, into=c("day","month","year"), sep=" ")
+names(liquidations)
+```
+## 2. Match to Companies House snapshot
+
+Now we pull in CH data and match to get detailed information for each company in the notices.
+
+```{r companies house import, using February as oldest we have}
+Feb_CH <- fread("BasicCompanyDataAsOneFile-2020-02-01.csv",
+                   select=c(1:13,15,20,27:30,33))
+```
+Prep gazette data, some company numbers have lost leading 0s and will fail the match
+```{r prep liquidations for join}
+liquidations$compnum <- gsub("\n          ","",liquidations$compnum)
+
+#some company numbers are missing leading zero in gazette, leaving strings of 7 chars
+#make function to correct this and overwrite vector:
+
+#nb for TRUE/FALSE to work, x=!na
+
+correct_co_num <- function(x,n){
+  if ((!is.na(x)) & (nchar(x)<n)) {
+  stringr::str_pad(x, 8, pad = "0")
+  }
+  else {
+  paste(x)
+  }
+}
+
+liquidations$compnum <- as.vector(unlist(lapply(liquidations$compnum, function(x) correct_co_num(x,8))))
+
+liquidations <- liquidations %>% 
+  rename("CompanyNumber"="compnum")
+
+#check it worked
+#unique(liquidations$compnum)
+```
+
+Now, that function has created one particular entry that's not particulary helpful, which is 	
+00113155 (really JE113155). If we change the zero correction, we lose 00263995 and maybe others. So we'll try removing that rogue entry before passing unmatches to the api.
+```{r}
+liquidations$CompanyNumber <- gsub("00113155","JE113155",liquidations$CompanyNumber)
+#this one has also 'inherited' a zero falsely in the source data, it was incorrect in gazette:
+liquidations$CompanyNumber <- gsub("011182451","11182451",liquidations$CompanyNumber)
+#this one is also incorrect in the source data
+liquidations$CompanyNumber <- gsub("00196402","01964102",liquidations$CompanyNumber)
+```
+
+
+```{r DON'T RUN test corrected function - redundant check}
+liquidations$compnum <- gsub("\n          ","",liquidations$compnum)
+
+
+liquidations$compnum <- gsub("\t","",liquidations$compnum)
+
+correct_co_num_2 <- function(x,n){
+  if ((!is.na(x)) & (nchar(x)<n)) {
+  paste0("0",x)
+  }
+  else {
+  paste(x)
+  }
+}
+
+liquidations$compnum <- as.vector(unlist(lapply(liquidations$compnum, function(x) correct_co_num_2(x,8))))
+
+liquidations <- liquidations %>% 
+  rename("CompanyNumber"="compnum")
+```
+
+
+```{r join ch to gazette}
+house_gazette <- inner_join(liquidations, Feb_CH, by="CompanyNumber")
+```
+
+### a) Store unmatched results to match via API
+
+```{r find and store unmatched results}
+unmatched_gazette <- anti_join(liquidations, Feb_CH, by="CompanyNumber")
+write_csv(unmatched_gazette, "unmatched_chg.csv")
+```
+
+## This code is written by Paul Bradshaw:
+
+## Query the Companies House API
+
+We can query the [Companies House API](https://developer.companieshouse.gov.uk/api/docs/) for data on each of the companies that don't have a match in the snapshot data. 
+
+A query API for a company looks like this: `https://api.companieshouse.gov.uk/company/09991766` (where the last 8 characters is a company number)
+
+But you also need a key.
+
+You can use command line to query it like so: `curl -uYOURKEYHERE: https://api.companieshouse.gov.uk/company/09991766 > 09991766.json `
+
+That would fetch the data from the specified URL, using the specified key to authenticate (you need to create a key at https://developer.companieshouse.gov.uk/developer/applications), and download it as a file with the specified name. This will be in the location you have navigated to in Terminal (if on a Mac) before running the command.
+
+To replicate that process in R we can use a [package dedicated to querying the Companies House API](https://rdrr.io/github/MatthewSmith430/CompaniesHouse/)
+
+```{r install CompaniesHouse package}
+#If you get an error uncomment the line below
+#install.packages("remotes")
+#remotes::install_github("MatthewSmith430/CompaniesHouse")
+```
+
+First we test it. Note that the key in the code below has been replaced so you cannot use mine!:
+
+```{r test query}
+#Store the key - you will need to change this
+mkey <- "YOURKEYHERE"
+test <- CompaniesHouse::CompanyDataExtract(company_number = "08430745", mkey)
+```
+
+We need to repeat that for each number in the list.
+
+```{r show first few company numbers}
+head(unmatched_gazette$CompanyNumber)
+```
+
+Some are dirty - we get this error when running the code in the loop below:
+
+`[1] "11102916\t" Error: parse error: trailing garbage`
+
+So we need to check for that:
+
+```{r gsub \t, #moved higher up pre-match}
+unmatched_gazette$CompanyNumber <- gsub("\t","",unmatched_gazette$CompanyNumber)
+```
+
+But `"SC404802 \n"` causes an error too, so we adopt a different approach, using regex to clean them up:
+
+```{r regex clean}
+#regex from https://stackoverflow.com/questions/50697242/input-mask-for-uk-company-registration-number
+#Adapted to factor in OC and remove the $ so it doesn't match to the end
+#We could also add IP for Industrial & Provident Company but would have to have an R on the end and only 5 digits and this includes companies that throw errors
+# see https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/426891/uniformResourceIdentifiersCustomerGuide.pdf
+#Also see these: https://www.doorda.com/glossary/company-number-prefixes/
+compnumclean <- stringr::str_extract(unmatched_gazette$CompanyNumber,"^(SC|NI|OC|IP|[0-9]{2})[0-9]{6}")
+unmatched_gazette$compnumclean <- compnumclean
+#then we have the issue of companies with a (extra info we don't want) after number
+compnumclean <- gsub("\\([A-Z]*?\\)","",compnumclean)
+unmatched_gazette$compnumclean <- compnumclean
+#that still doesn't sort a few so remove manually:
+unmatched_gazette$compnumclean <- gsub("34351172",NA,unmatched_gazette$compnumclean)
+unmatched_gazette$compnumclean <- gsub("00000000",NA,unmatched_gazette$compnumclean)
+#this one is a charity
+unmatched_gazette$compnumclean <- gsub("01031671",NA,unmatched_gazette$compnumclean)
+```
+
+The problem with this is that it produces some `NA` results, so the code above is adapted until we end up with an NA subset that only contains companies we can't track or are not interested in.
+
+We then store that NA subset separately and whittle down the unmatched companies to those with a matchable company number.
+
+```{r na subset}
+compnumna <- subset(unmatched_gazette, is.na(unmatched_gazette$compnumclean))
+write.csv(compnumna,"compnumna.csv")
+unmatched_gazette.toapi <- subset(unmatched_gazette, !is.na(unmatched_gazette$compnumclean))
+write.csv(compnumna,"compnumna.csv")
+#unmatched_gazette.toapi <- subset(unmatched_gazette.toapi, !is.na(unmatched_gazette.toapi$companyname))
+#check
+unmatched_gazette.toapi <- unmatched_gazette.toapi %>% 
+  filter(!is.na(companyname))
+```
+
+Now we cycle through those and query the API for each.
+
+Because each query is stored as a dataframe, we need to bind them as we go.
+
+The [rate limit is 600 per 5 minute interval](https://developer.companieshouse.gov.uk/api/docs/index/gettingStarted/rateLimiting.html), so we need to stagger it too.
+
+
+```{r loop through numbers & query API}
+#Create an empty dataframe with the right fields
+apimatches <- test[0,]
+#Loop through the cleaned company numbers
+#set a counter
+counter <- 0
+#This list is compiled to avoid all the ones that have no response
+for(i in unmatched_gazette.toapi$compnumclean){
+  #print the number so we can troubleshoot any errors that interrupt it
+  print(i)
+  #Increment the counter and print it
+  counter <- counter+1
+  print(counter)
+  #If it's been 600 queries
+  if(counter == 599){
+    #Sleep for 5 minutes to make sure we are in a new 5 minute period
+    Sys.sleep(300)
+  }
+  #Store the result of querying the API for company details
+  tempfetch <- CompaniesHouse::CompanyDataExtract(company_number = i, mkey)
+  #Add it to the dataframe if that works
+  #tryCatch is used because at least one company number returns an empty result
+  apimatches <- rbind(apimatches,tempfetch) 
+}
+```
+
+
+```{r}
+#Export
+write.csv(apimatches,"apimatches.csv")
+
+```
+
+now we have to join the sets together:
+
+
+```{r join onto rest of chg matched data}
+#this will have to be for apimatchesall soon but for now, test structure
+#apimatches <- apimatches %>% 
+  #rename(compnumclean=company.number)
+
+apimatches <- apimatches %>% 
+  rename(compnumclean=company.number)
+```
+
+
+
+```{r}
+api_test_join <- inner_join(unmatched_gazette, apimatches, by="compnumclean")
+
+#take out CompanyNumber (old one), replace with compnumclean
+
+api_test_join <- api_test_join %>% 
+  select(-CompanyNumber) %>% 
+  rename(CompanyNumber=compnumclean)
+
+api_prep_join <- api_test_join %>% 
+  select(address=address.x, companyname, CompanyNumber, noticecategory,
+         noticecode, noticetype, day, month, year, typeofliq, url, CompanyName=company.name, 
+         RegAddress.AddressLine1=address.y,RegAddress.PostTown=locality,
+         RegAddress.PostCode=postcode, IncorporationDate=Date.of.Creation,SICCode.SicText_1=sic.code)
+
+#we need to add in three other sic cols or this join will fail
+api_prep_join$SICCode.SicText_2 <- NA
+api_prep_join$SICCode.SicText_3 <- NA
+api_prep_join$SICCode.SicText_4 <- NA
+
+```
+
+```{r}
+house_gazette <- house_gazette %>% 
+  select(names(api_prep_join))
+
+chg_match <- rbind(house_gazette, api_prep_join)
+```
+
+##3. Join to postcode and LA
+```{r import postcode to la lookup sheet}
+postcode_to_ons_ref <- fread("NSPL_FEB_2020_UK.csv", select=c("pcds","laua"))
+postcode_to_ons_ref <- postcode_to_ons_ref %>% 
+  rename(postcode=pcds)
+```
+
+then join to house_gazette
+```{r postcode match, create chg_postcode}
+chg_match <- chg_match %>%
+  rename(postcode=RegAddress.PostCode)
+#checking for whitespace error (doesn't seem to be a factor, but for record in case I do need this one day)
+chg_match$postcode <- as.vector(unlist(
+  lapply(chg_match$postcode, function(x) str_trim(x, side = "both"))
+  ))
+```
+
+
+```{r}
+#naming convention as ch, companies house, gazette, g 
+chg_postcode <- left_join(chg_match, postcode_to_ons_ref)
+```
+
+
+```{r check quality of match}
+find_na <- chg_postcode %>% 
+  filter(is.na(laua))
+#some postcodes are plain awkward, not sure what to do about these, not too many
+```
+
+That's about 135 lost, but not much we can do, except patch them back in by geocoding to la maybe...
+
+Then join code for la onto name and pivot:
+
+```{r create by_district analysis}
+#read in la to ons code lookup
+la_name_to_ons_code <- read_csv("Local_Authority_Districts_December_2019_Names_and_Codes_in_the_United_Kingdom.csv")
+
+#names(la_name_to_ons_code)
+la_name_to_ons_code <- la_name_to_ons_code %>%
+  select(LAD19CD, LAD19NM) %>% 
+  rename("laua"=LAD19CD, "LA_name"=LAD19NM)
+
+#join
+chg_postcode_la <- left_join(chg_postcode, la_name_to_ons_code)
+
+#check for non-matches
+find_na_LA <- chg_postcode_la %>% 
+  filter(is.na(LA_name))
+#another one lost, others are carried nas from postcode match fail
+
+#Pivot by area (but this is not particularly helpful, we need to normalise)
+la_pivot <- chg_postcode_la %>% count(LA_name, sort=T)
+
+#now 
+#note this will overwrite version created by original script 'postcode_matching.R'
+write_csv(la_pivot, "gazette_insolvencies_by_district.csv")
+
+```
+Now we really want to normalise that la table of insolvencies, breaking by year.
+Has the number of insolvencies for 2020/21 already exceeded the number of insolvencies for 2019/20 in that area?
+Or the expected number of business deaths the year before?
+
+Nomis/Enterprise active/deaths stats?
+Nomis may be more up to date, but doesn't have deaths...
+
+```{r import and tidy enterprise data at district level}
+#Nomis/Enterprise active/deaths stats?
+#Nomis may be more up to date if it has deaths...
+```
+
+
+
+## 4. Sic match
+
+We want to find the proportion of businesses in each industry group and sic type.
+```{r reshape chg}
+#replace missing code fields with na and remove in melted version, we're fudging it a bit with SicText_1 as this is allowed to be NA and we don't want to lose an insolvency record altogether if there's no sic.
+chg_postcode_la <- chg_postcode_la %>% 
+  naniar::replace_with_na_at(.vars = c("SICCode.SicText_2","SICCode.SicText_3","SICCode.SicText_4"),condition = ~.x %in% "")
+chg_postcode_la <- chg_postcode_la %>%
+  dplyr::mutate(SICCode.SicText_1 = replace_na(SICCode.SicText_1, "None Supplied"))
+chg_long <- chg_postcode_la %>%
+   pivot_longer(cols=c("SICCode.SicText_1","SICCode.SicText_2","SICCode.SicText_3","SICCode.SicText_4"),
+               names_to = "sicfield",
+               values_to = "siccode",
+               values_drop_na = TRUE)
+
+chg_long <- chg_long %>%
+  naniar::replace_with_na_at(.vars = c("siccode"),condition = ~.x %in% "")
+
+chg_long <- chg_long %>%
+  tidyr::separate(col=siccode, into=c("siccode","sicdesc"), sep=" - ")
+  
+
+```
+
+
+Now we can tidy and join onto a 'dictionary' of sic class codes and descriptions
+
+```{r match on sicdivs to make chg_sic}
+chg_long$sicdiv <- substr(chg_long$siccode,1,2)
+#import ref
+sicdivs <- rio::import("sic2007_division_group_class.xls", sheet = 2)
+colnames(sicdivs) <- c("sicdiv","divisionname")
+
+chg_sic <- left_join(chg_long, sicdivs)
+```
+
+This subsection is to match sic division to the more convienient set of 17 broad industry groups (collation of sections)
+
+We can match from division to broad industry classification using this key:
+```{r import industry_key, match to broad industry group}
+industry_to_div <- read_csv("industry_to_div.csv", 
+    col_types = cols(division_top = col_skip()))
+
+industry_to_div$division_bottom <-  str_pad(industry_to_div$division_bottom,2,pad="0")
+industry_to_div <- industry_to_div %>% 
+  rename(sicdiv=division_bottom)
+
+chg_sic <- left_join(chg_sic, industry_to_div)
+```
+```{r write out chg_sic object as it's time-consuming to make}
+write_csv(chg_sic,"chg_sic.csv")
+```
+
+##5. Sic analysis - new script
+```{r sic analysis by broad industry group}
+
+```
+
+##6. Analysis over time
+```{r taken from postcode_matching.R initial work ref dev}
+pivot_mth_yr <- chg_sic %>% 
+  group_by(year, month) %>% 
+  summarise(insolvencies=n()) %>% 
+  arrange(month)
+
+library(ggplot2)
+str(pivot_mth_yr)
+
+pivot_mth_yr$month <- factor(pivot_mth_yr$month, levels= month.name)
+
+grouped_bars <- ggplot(pivot_mth_yr, 
+                       aes(x = month, 
+                           y = insolvencies, 
+                           fill = year)) +
+  geom_bar(stat="identity", position = position_dodge2(preserve = "single")) +
+  geom_hline(yintercept = 0, size = 1, colour="#333333") +
+  scale_fill_manual(values = c("#1380A1", "#FAAB18","#8B0000"))+
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+grouped_bars
+```
+
+```{r facetted by industry group?}
+pivot_mth_yr_sic <- chg_sic %>% 
+  group_by(year, month, industry_desc) %>% 
+  summarise(insolvencies=n()) %>% 
+  arrange(month)
+
+pivot_mth_yr_sic $month <- factor(pivot_mth_yr_sic $month, levels= month.name)
+
+grouped_bars <- ggplot(pivot_mth_yr_sic, 
+                       aes(x = month, 
+                           y = insolvencies, 
+                           fill = year)) +
+  facet_wrap(~industry_desc, scales = "free")+
+  geom_bar(stat="identity", position = position_dodge2(preserve = "single")) +
+  geom_hline(yintercept = 0, size = 1, colour="#333333") +
+  scale_fill_manual(values = c("#1380A1", "#FAAB18","#8B0000"))+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+grouped_bars
+```
+
+

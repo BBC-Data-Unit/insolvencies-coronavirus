@@ -1,0 +1,263 @@
+---
+title: "Insolvencies - creating a reduced SH snapshot"
+output: html_notebook
+---
+
+# Insolvencies - creating a filtered SH snapshot
+
+This notebook details the process of checking data from the insolvency notices scrape against the Companies House (CH) snapshot in order to create a smaller CH file to work with.
+
+## Combining the data - left join
+
+We need Rio to import the data.
+
+```{r install rio}
+library("rio")
+```
+Then import part of the notices data:
+
+```{r import gazette}
+#Import each dataset
+notices333_332 <- rio::import("notices 333_332.csv")
+#Show column names
+colnames(notices333_332)
+```
+
+And the Companies House data:
+
+This is the snapshot for 01/06/2020, split into 6 files.
+
+```{r import and combine CH data June}
+#Import one dataset
+chsnapshot010620 <- rio::import("BasicCompanyData-2020-06-01-part1_6.csv")
+#Create a list of CSV files that match the pattern
+csvfiles <- list.files(pattern="BasicCompanyData-2020-06-01-part[2-6]_6.csv")
+#Loop through to create a combined file
+for (i in csvfiles){
+  onefile <- rio::import(i)
+  chsnapshot010620 <- rbind(chsnapshot010620,onefile)
+}
+```
+
+We only need some columns, so we can reduce the object size:
+
+```{r Reduce the file}
+#Reduce the file 
+chsnapshot010620 <- chsnapshot010620[c(1:2,27:30)]
+colnames(chsnapshot010620)
+```
+
+
+## Filtering data by left join
+
+Now see how many of the company numbers in the insolvency data are also in the Companies House data. We need `dplyr` for its `left_join` function:
+
+```{r dplyr library}
+library(dplyr)
+```
+
+Now to try the left join. This is easier if the column names are the same, so we rename that first:
+
+```{r rename compnum col}
+colnames(chsnapshot010620)[2] <- "compnum"
+colnames(chsnapshot010620)
+```
+
+We also need to filter the insolvency data to just those with company numbers:
+
+```{r filter out no CN}
+notices333_332cn <- subset(notices333_332, notices333_332$compnum != "NO DATA")
+```
+
+Then create a left join which pulls in CH data:
+
+```{r left join with CH}
+joineddata <- dplyr::left_join(notices333_332cn, chsnapshot010620, by = "compnum")
+```
+
+## Checking for non-matches
+
+Which company numbers don't match?
+
+```{r subset to show non matches}
+nomatch <- subset(joineddata, is.na(joineddata$CompanyName))
+nomatch
+```
+
+A quick check on 02878992 [does bring up a match](https://beta.companieshouse.gov.uk/company/02878992/filing-history) but the data shows the problem: it's stored as 02878992\n	
+
+But 09991766 is also [on Companies House](https://beta.companieshouse.gov.uk/company/09991766/filing-history) as is 03139775 so why no match?
+
+Is there any pattern when it comes to category?
+
+```{r show categories of nomatch}
+table(nomatch$noticecategory)
+```
+Compare that to those that *do* match:
+
+```{r show categories of match}
+match <- subset(joineddata, !is.na(joineddata$CompanyName))
+table(match$noticecategory)
+```
+
+There's half a pattern here - it's notable that none of those in the *Companies & Financial Regulation* category match - but that's still a minority of the non-matches.
+
+Let's see if the name is any better:
+
+Then create a left join which pulls in CH data:
+
+```{r left join based on name}
+colnames(chsnapshot010620)[1] <- "companyname"
+colnames(chsnapshot010620)
+joineddata.name <- dplyr::left_join(notices333_332cn, chsnapshot010620, by = "companyname")
+nomatch.name <- subset(joineddata.name, is.na(joineddata.name$SICCode.SicText_1))
+nomatch.name
+```
+
+
+The problem remains,  and not surprisingly there are a large number of mismatches where presumably a company's name is slightly different but the company number is consistent. 
+
+We now need to check the CH data to see if there are companies on the website, but not in the snapshot. 
+
+We can use `grep`, tested first on the smaller dataset:
+
+```{r grep joineddata}
+joineddata[grep("SIMELLA.*",joineddata$companyname),]
+```
+Now on the larger one:
+
+```{r grep SIMELLA}
+chsnapshot010620[grep("SIMELLA.*",chsnapshot010620$companyname),]
+```
+
+That company isn't in there. We could be less fussy to see if it's spelt differently:
+
+```{r grep SIME}
+#A caret symbol is added to specify it has to start with those characters
+chsnapshot010620[grep("^SIME.*",chsnapshot010620$companyname),]
+```
+
+It's not there either.
+
+Now we have two questions to check:
+1) It appears that companies go insolvent and are removed from the snapshot even if they are still on the website. How long does this take? We can check more recent insolvency notices to see if they are still around for a while.
+2) Why does this only happen to some companies?
+
+As an aside, we can [use the Companies House API](https://developer.companieshouse.gov.uk/api/docs/company/company_number/readCompanyProfile.html) to get the data instead - this includes SIC code for companies listed on the site even when they're not in the snapshot.
+
+## Testing on more recent notices
+
+For 1) let's look at more recent notices (September 2019) to see if the problem is as pronounced (213 non-matches out of 1478 records - about 14%)
+
+```{r import gazette 338}
+#Import dataset
+notices338_337 <- rio::import("notices 338_337.csv")
+notices338_337cn <- subset(notices338_337, notices338_337$compnum != "NO DATA")
+joineddata338 <- dplyr::left_join(notices338_337cn, chsnapshot010620, by = "compnum")
+nomatch338 <- subset(joineddata338, is.na(joineddata338$companyname.y))
+nomatch338
+```
+
+This is more mismatches but the data was bigger. As a percentage it's much smaller - 8%:
+
+```{r simple sum}
+253/3130
+```
+
+## Checking against Feb snapshot
+
+This is the snapshot for 01/02/2020, split into 6 files.
+
+```{r import and combine CH data Feb}
+#Import one dataset
+chsnapshot010220 <- rio::import("BasicCompanyDataAsOneFile-2020-02-01.csv")
+#Reduce the file 
+chsnapshot010220 <- chsnapshot010220[c(1:2,27:30)]
+colnames(chsnapshot010220)
+colnames(chsnapshot010220)[2] <- "compnum"
+```
+
+```{r left join with Feb CH}
+joineddataFeb <- dplyr::left_join(notices333_332cn, chsnapshot010220, by = "compnum")
+nomatchF <- subset(joineddataFeb, is.na(joineddataFeb$CompanyName))
+nomatchF
+```
+
+Let's try to clean up those \n aspects to see if we can get any more matches.
+
+```{r}
+notices333_332cn$companyname <- gsub("\n ","",notices333_332cn$companyname)
+notices333_332cn$compnum <- gsub("\n ","",notices333_332cn$compnum)
+joineddataFeb <- dplyr::left_join(notices333_332cn, chsnapshot010220, by = "compnum")
+nomatchF <- subset(joineddataFeb, is.na(joineddataFeb$CompanyName))
+nomatchF
+```
+
+No, but it does give us clean data to query the API.
+
+We also need to clean up any company numbers that have less than 8 characters:
+
+```{r}
+#Code by Anna Khoo
+#some company numbers are missing leading zero in gazette, leaving strings of 7 chars
+#make function to correct this and overwrite vector:
+correct_co_num <- function(x,n){
+  if ((!is.na(x)) & (nchar(x)<n)) {
+  stringr::str_pad(x, 8, pad = "0")
+  }
+  else {
+  paste(x)
+  }
+}
+
+```
+
+Run the function to clean up that column: 
+
+```{r}
+#Code by Anna Khoo
+notices333_332cn$compnum <- as.vector(unlist(lapply(notices333_332cn$compnum, function(x) correct_co_num(x,8))))
+```
+
+Let's see if that helps:
+
+```{r}
+joineddataFeb <- dplyr::left_join(notices333_332cn, chsnapshot010220, by = "compnum")
+nomatchF <- subset(joineddataFeb, is.na(joineddataFeb$CompanyName))
+nomatchF
+```
+
+Yes - we now have 2 fewer mismatches.
+
+## Creating a function to work with data once it's ready
+
+Once we have a full scrape of Gazette data and the CH snapshots we need to do this (probably encoded in a function):
+
+* Combine the different scrapes into one data frame
+
+```{r import and combine gazette}
+#Import one dataset
+notices <- rio::import("notices 338_337.csv")
+notices <- notices[0,]
+#Create a list of CSV files that match the pattern
+csvfiles <- list.files(pattern="notices [0-9]{3}_[0-9]{3}.csv")
+csvfiles
+#Loop through to create a combined file
+for (i in csvfiles){
+  onefile <- rio::import(i)
+  notices <- rbind(notices,onefile)
+}
+```
+
+
+
+Filter to just company insolvencies and tidy dates
+Left_join with CH snapshot to add 4 columns of SIC codes and address
+*Store unmatched companies separately to query via API
+Query API to fetch SIC codes and address for unmatched companies
+Join both datasets
+Conduct address analysis
+Reshape joined data to convert 4 SIC columns to one
+Add in simplified SIC data (e.g. division/group/class) for classification
+Conduct SIC analysis
+

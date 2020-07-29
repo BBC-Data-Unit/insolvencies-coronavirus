@@ -1,0 +1,381 @@
+LA_name,n
+Manchester,1041
+City of London,992
+Birmingham,862
+Westminster,794
+Leeds,738
+Tower Hamlets,670
+Barnet,669
+Camden,624
+Glasgow City,582
+Sheffield,554
+Brighton and Hove,473
+Islington,418
+Cambridge,375
+Kirklees,371
+Southampton,370
+Bromley,360
+"Bristol, City of",357
+Norwich,353
+Enfield,340
+Trafford,336
+Bolton,321
+Coventry,316
+Bury,308
+City of Edinburgh,281
+Redbridge,272
+Liverpool,266
+Southend-on-Sea,265
+St Albans,256
+Newcastle upon Tyne,237
+Southwark,235
+Harrow,215
+Eastleigh,211
+Nottingham,210
+Milton Keynes,195
+Harborough,189
+Aberdeen City,186
+"Bournemouth, Christchurch and Poole",183
+Brentwood,181
+Doncaster,180
+Richmond upon Thames,174
+Salford,174
+Leicester,171
+Swansea,170
+Hertsmere,169
+Cheltenham,168
+Exeter,167
+Northampton,167
+Preston,167
+Oldham,163
+Cheshire East,159
+Wiltshire,159
+Cardiff,158
+Havering,157
+Reading,157
+Wakefield,157
+Dundee City,152
+Bradford,150
+York,150
+Hackney,148
+Charnwood,147
+Sutton,141
+Bromsgrove,137
+Walsall,134
+Winchester,129
+Belfast,128
+Croydon,127
+Wychavon,126
+Merton,122
+Stockton-on-Tees,122
+Tunbridge Wells,122
+Blackpool,120
+Dorset,120
+Wycombe,118
+Wandsworth,117
+NA,117
+Hillingdon,112
+Bexley,110
+Epping Forest,110
+Maidstone,105
+Colchester,104
+Chorley,102
+Stockport,101
+Derby,100
+Renfrewshire,99
+East Riding of Yorkshire,98
+Guildford,98
+Swindon,95
+Epsom and Ewell,92
+Aylesbury Vale,91
+Blaby,90
+Darlington,90
+Medway,88
+West Lancashire,88
+Warrington,85
+Bath and North East Somerset,81
+Chelmsford,81
+Dacorum,81
+Waltham Forest,81
+Fife,76
+Gateshead,75
+Watford,73
+"Kingston upon Hull, City of",72
+Shropshire,72
+Calderdale,71
+Cheshire West and Chester,71
+Dartford,71
+Burnley,70
+Stratford-on-Avon,70
+North Somerset,69
+Oxford,68
+Broxtowe,67
+New Forest,67
+Aberdeenshire,66
+Wokingham,66
+Hounslow,64
+Ealing,63
+Fylde,62
+East Hertfordshire,60
+Kensington and Chelsea,60
+Lambeth,59
+Hart,58
+Canterbury,57
+Ashford,56
+Stoke-on-Trent,56
+County Durham,55
+Hammersmith and Fulham,55
+South Gloucestershire,55
+Plymouth,54
+West Berkshire,54
+Slough,53
+Cornwall,52
+North Tyneside,52
+Brent,51
+Wolverhampton,51
+Chesterfield,50
+Crawley,50
+Elmbridge,50
+South Bucks,50
+Tandridge,50
+Woking,50
+Kingston upon Thames,49
+Newport,49
+West Suffolk,49
+Harrogate,48
+Rushcliffe,48
+Central Bedfordshire,47
+Newcastle-under-Lyme,47
+Peterborough,47
+Somerset West and Taunton,47
+Three Rivers,46
+Windsor and Maidenhead,46
+Dudley,45
+South Cambridgeshire,45
+Newham,44
+North Lincolnshire,44
+Solihull,44
+South Ribble,44
+Basildon,43
+South Hams,42
+East Suffolk,41
+North East Lincolnshire,41
+Halton,40
+Haringey,40
+Lewisham,40
+Reigate and Banstead,40
+South Lanarkshire,40
+Greenwich,39
+Test Valley,39
+Rotherham,38
+Carlisle,37
+Wealden,37
+Worthing,37
+Broadland,36
+Waverley,36
+Wirral,36
+North Hertfordshire,35
+Sevenoaks,35
+Tewkesbury,34
+"Herefordshire, County of",33
+Runnymede,33
+Basingstoke and Deane,32
+Falkirk,32
+Horsham,32
+North Kesteven,32
+Sefton,32
+Huntingdonshire,30
+Warwick,30
+Mid Sussex,29
+West Oxfordshire,29
+Wigan,29
+Chiltern,28
+Northumberland,28
+South Oxfordshire,28
+Tonbridge and Malling,28
+Bassetlaw,27
+Portsmouth,27
+Sandwell,27
+Tamworth,27
+Barnsley,26
+Braintree,26
+Cherwell,26
+North Lanarkshire,26
+South Somerset,26
+Vale of White Horse,26
+"Newry, Mourne and Down",25
+South Norfolk,25
+Tameside,25
+Bolsover,24
+Chichester,24
+Derbyshire Dales,24
+Highland,24
+Middlesbrough,24
+Rugby,24
+Teignbridge,24
+Worcester,24
+Wyre,24
+Flintshire,23
+Knowsley,23
+Malvern Hills,23
+Rhondda Cynon Taf,23
+Stirling,23
+Welwyn Hatfield,23
+Luton,22
+Mole Valley,22
+Nuneaton and Bedworth,22
+Telford and Wrekin,22
+Swale,21
+Ards and North Down,20
+Barking and Dagenham,20
+Bedford,20
+Cotswold,20
+Rochdale,20
+St. Helens,20
+Surrey Heath,20
+Thurrock,20
+East Hampshire,19
+Ipswich,19
+Lancaster,19
+Rushmoor,19
+Sedgemoor,19
+Blackburn with Darwen,18
+Lisburn and Castlereagh,18
+Maldon,18
+North West Leicestershire,18
+Rochford,18
+South Tyneside,18
+Broxbourne,17
+Cannock Chase,17
+Dover,17
+Hambleton,17
+Mid Ulster,17
+Ribble Valley,17
+South Kesteven,17
+Uttlesford,17
+Lincoln,16
+North East Derbyshire,16
+Stevenage,16
+West Lothian,16
+Angus,15
+Bracknell Forest,15
+King's Lynn and West Norfolk,15
+Mendip,15
+Mid Suffolk,15
+Perth and Kinross,15
+Stroud,15
+Tendring,15
+Breckland,14
+Carmarthenshire,14
+Fareham,14
+Hartlepool,14
+Scarborough,14
+Adur,13
+Arun,13
+Bridgend,13
+East Devon,13
+East Dunbartonshire,13
+East Renfrewshire,13
+Eastbourne,13
+Eden,13
+Gloucester,13
+Havant,13
+Lichfield,13
+North Norfolk,13
+Redditch,13
+Rother,13
+South Ayrshire,13
+South Derbyshire,13
+Spelthorne,13
+Torbay,13
+Amber Valley,12
+Castle Point,12
+East Lothian,12
+Folkestone and Hythe,12
+Gedling,12
+Gravesham,12
+Isle of Wight,12
+Sunderland,12
+Wyre Forest,12
+Daventry,11
+East Northamptonshire,11
+Erewash,11
+Great Yarmouth,11
+Kettering,11
+Scottish Borders,11
+South Holland,11
+South Lakeland,11
+Stafford,11
+Wrexham,11
+Caerphilly,10
+Craven,10
+Derry City and Strabane,10
+East Cambridgeshire,10
+East Staffordshire,10
+Hinckley and Bosworth,10
+Midlothian,10
+Newark and Sherwood,10
+North Devon,10
+Ryedale,10
+Wellingborough,10
+"Armagh City, Banbridge and Craigavon",9
+Ashfield,9
+Babergh,9
+Dumfries and Galloway,9
+High Peak,9
+Lewes,9
+Mid Devon,9
+Moray,9
+Redcar and Cleveland,9
+Selby,9
+South Northamptonshire,9
+Thanet,9
+Vale of Glamorgan,9
+Hastings,8
+Mansfield,8
+Melton,8
+North Ayrshire,8
+Powys,8
+South Staffordshire,8
+Staffordshire Moorlands,8
+West Lindsey,8
+East Lindsey,7
+Inverclyde,7
+Monmouthshire,7
+North Warwickshire,7
+Oadby and Wigston,7
+Pembrokeshire,7
+Torridge,7
+Allerdale,6
+Antrim and Newtownabbey,6
+Argyll and Bute,6
+Causeway Coast and Glens,6
+Forest of Dean,6
+Hyndburn,6
+East Ayrshire,5
+Gosport,5
+Pendle,5
+Shetland Islands,5
+Denbighshire,4
+Fenland,4
+Harlow,4
+Merthyr Tydfil,4
+Neath Port Talbot,4
+Rossendale,4
+Rutland,4
+Boston,3
+Clackmannanshire,3
+Conwy,3
+Corby,3
+Fermanagh and Omagh,3
+Gwynedd,3
+Richmondshire,3
+Torfaen,3
+Barrow-in-Furness,2
+Copeland,2
+West Devon,2
+Blaenau Gwent,1
+Ceredigion,1
+Isle of Anglesey,1
+Na h-Eileanan Siar,1
+West Dunbartonshire,1

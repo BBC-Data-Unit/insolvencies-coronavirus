@@ -1,0 +1,349 @@
+---
+title: "Insolvencies"
+output: html_notebook
+---
+
+# Insolvencies
+
+We've scraped [corporate insolvency notices](https://m.thegazette.co.uk/insolvency?categorycode=G205010000&results-page=1) on the Gazette - [personal insolvency notices are a different code](https://m.thegazette.co.uk/insolvency?categorycode=G206030000&results-page=1). That resulted in a number of separate files that we need to combine. Note that these are only search results, not the detail pages which by the end of this notebook we move on to.
+
+For convenience I've moved these into their own folder called 'gazettescrapeMarch31_apr8' - they will need to be moved out before running the code below.
+
+```{r import and combine gazette}
+library("rio")
+#Import one dataset
+notices <- rio::import("1to11768.csv")
+#Create a list of CSV files that match the pattern
+csvfiles <- list.files(pattern="[0-9]{5}to[0-9]{5}.csv")
+csvfiles
+#Loop through to create a combined file
+for (i in csvfiles){
+  onefile <- rio::import(i)
+  notices <- rbind(notices,onefile)
+}
+```
+
+## Remove duplicates
+
+Back to the Gazette data. Let's remove the first column, so we can then remove duplicate entries
+
+```{r remove col 1 and duplicates}
+library("tidyverse")
+#Remove first column
+notices <- notices[,-1]
+#We can use unique to remove duplicates
+notices.uniq <- unique(notices)
+#Or we can do it this way
+notices.dist <- dplyr::distinct(notices)
+```
+
+Let's get an overview of the id codes:
+
+```{r show summary}
+summary(notices.dist$Linkid)
+```
+
+The id codes appear to be broadly sequential, with more recent notices having higher numbers:
+
+```{r show head}
+head(notices.uniq)
+```
+
+## Clean up dates
+
+Let's extract some date information:
+
+```{r extract day}
+#Use substring to grab first 2 characters
+notices.uniq$datenum <- substr(notices.uniq$`Publication Date`,1,2)
+#Convert to number (which also removes space)
+notices.uniq$datenum <- as.numeric(notices.uniq$datenum)
+#Check the range of numbers goes from 1 to 31
+summary(notices.uniq$datenum)
+```
+
+Let's try to use lubridate:
+
+```{r use lubridate}
+notices.uniq$dateclean <- lubridate::dmy(notices.uniq$`Publication Date`)
+notices.uniq$year <- lubridate::year(notices.uniq$dateclean)
+notices.uniq$month <- lubridate::month(notices.uniq$dateclean)
+notices.uniq$day <- lubridate::day(notices.uniq$dateclean)
+```
+
+```{r sort by date}
+#Use the arrange function in dplyr to sort by date
+notices.uniq <- notices.uniq %>% dplyr::arrange(desc(dateclean))
+```
+
+## Remove 2018
+
+Now that we've done that, let's get rid of the 2018 data so we're only looking at 2019 and 2020.
+
+```{r remove 2018}
+notices19to20 <- subset(notices.uniq, notices.uniq$year != 2018)
+```
+
+## Extract postcodes
+
+We can use some regex to extract a postcode we find in the Abstract column where the addresses are stored:
+
+```{r extract postcode}
+notices19to20$postcode <- stringr::str_extract(notices19to20$Abstract,"[A-Z]{1,2}[0-9]{1,2} [0-9][A-Z]{2}")
+```
+
+Some are NA - but how many?
+
+```{r count NAs}
+sum(is.na(notices19to20$postcode))
+```
+
+That's more than a third, so perhaps our code is too specific.
+
+```{r extract postcode more loosely}
+notices19to20$postcode2 <- stringr::str_extract(notices19to20$Abstract,"[A-Z]{1,2}[0-9]{1,2}.*[0-9][A-Z]{2}")
+sum(is.na(notices19to20$postcode2))
+```
+
+We can also convert that to a postcode district by splitting on the space
+
+```{r split on space}
+#see https://stackoverflow.com/questions/4350440/split-data-frame-string-column-into-multiple-columns
+notices19to20$district <- stringr::str_split_fixed(notices19to20$postcode, " ", 2)
+```
+
+And use the same approach to split out the 'Company Address' section:
+
+```{r split out address}
+notices19to20$address <- stringr::str_split_fixed(notices19to20$Abstract, "Company Address;", 2)
+summary(notices19to20$address)
+```
+
+
+## Create a version where each company appears only once
+
+We don't want to double-count companies that appear more than once, so let's create a dataset where each appears once:
+
+```{r unique by company}
+#First remove the duplicates
+noticesbycompanyonly <- notices19to20 %>% dplyr::distinct(Name, .keep_all = T)
+#export
+write.csv(noticesbycompanyonly, "noticesbycompanyonly.csv")
+```
+
+Let's see if the postcode ratio is any better.
+
+```{r count nas by company}
+sum(is.na(noticesbycompanyonly$postcode))
+companynas <- subset(noticesbycompanyonly, is.na(noticesbycompanyonly$postcode)) 
+```
+
+
+## Subset by type
+
+Companies appear more than once in different categories
+
+```{r show breakdown of categories}
+#Create a table of categories and convert to data frame
+categories <- data.frame(table(notices19to20$Category))
+#Sort by frequency desc
+categories <- categories %>% arrange(desc(Freq))
+#Show
+categories
+#export
+write.csv(categories, "categories.csv")
+```
+
+Let's create a subset for the biggest categories, as well as appointment of administrators:
+
+```{r subset by main categories}
+notices.liquidators <- subset(notices19to20, notices19to20$Category == "Appointment of Liquidators")
+notices.rwu <- subset(notices19to20, notices19to20$Category == "Resolutions for Winding-up")
+notices.tocreditors <- subset(notices19to20, notices19to20$Category == "Notices to Creditors")
+notices.administrators <- subset(notices19to20, notices19to20$Category == "Appointment of Administrators")
+write_csv(notices.rwu, "noticesrwu.csv")
+write_csv(notices.liquidators, "noticesliquidators.csv")
+write_csv(notices.tocreditors, "noticestocreditors.csv")
+write_csv(notices.administrators, "notices.administrators.csv")
+```
+
+## Subset by company
+
+Let's see which company appears most, and what categories it goes through.
+
+```{r show breakdown of companies}
+#Create a table of categories and convert to data frame
+names <- data.frame(table(notices19to20$Name))
+#Sort by frequency desc
+names <- names %>% arrange(desc(Freq))
+#Show
+names
+#export
+write.csv(names, "names.csv")
+```
+
+This indicates that some of the data has the category in the name field. We'll look at that in a moment.
+
+First, let's check out NOHO LIMITED and the others to see what stages it went through.
+
+```{r look at specific companies}
+noho <- subset(notices19to20, notices19to20$Name == "NOHO LIMITED")
+accessinstall <- subset(notices19to20, notices19to20$Name == "ACCESS INSTALL LIMITED")
+HUDSPITHS <- subset(notices19to20, notices19to20$Name == "HUDSPITHS LIMITED")
+lakedis <- subset(notices19to20, notices19to20$Name == "LAKE DISTRICT BIOGAS LIMITED")
+NB42 <- subset(notices19to20, notices19to20$Name == "NB42 LIMITED")
+noho
+accessinstall
+```
+
+
+
+## Checking wrongly named data
+
+```{r subset where names are categories}
+nameresolution <- subset(notices19to20, notices19to20$Name == "Resolutions for Winding-up")
+head(nameresolution)
+```
+
+The detail pages (e.g. [https://m.thegazette.co.uk/notice/3541488](https://m.thegazette.co.uk/notice/3541488)) seem OK so we will see what happens when we scrape that.
+
+
+
+## Create a subset for one category, with each company appearing once
+
+Let's create a dataset where each company appears once in one category:
+
+```{r unique by company in category}
+#First remove the duplicates
+noticesLIQbycompanyonly <- notices.liquidators %>% dplyr::distinct(Name, .keep_all = T)
+#export
+write.csv(noticesLIQbycompanyonly, "noticesLIQbycompanyonly.csv")
+nrow(notices.liquidators)
+nrow(noticesLIQbycompanyonly)
+nrow(notices.liquidators) - nrow(noticesLIQbycompanyonly)
+(nrow(notices.liquidators) - nrow(noticesLIQbycompanyonly))/nrow(notices.liquidators)
+```
+
+We can see that the difference is small - fewer than 400 notices (about 1%) are from a company that has previously posted a notice in that category.
+
+## Extract postcodes for one category (liquidation notices)
+
+We repeat the process from earlier
+
+```{r extract postcode for liq}
+notices.liquidators$postcode <- stringr::str_extract(notices.liquidators$Abstract,"[A-Z]{1,2}[0-9]{1,2} [0-9][A-Z]{2}")
+```
+
+Some are NA - but how many?
+
+```{r count NAs liq}
+sum(is.na(notices.liquidators$postcode))
+```
+
+That's more than half.
+
+```{r extract postcode more loosely liq}
+notices.liquidators$postcode2 <- stringr::str_extract(notices.liquidators$Abstract,"[A-Z]{1,2}[0-9]{1,2}.*[0-9][A-Z]{2}")
+sum(is.na(notices.liquidators$postcode2))
+```
+
+Let's try to get the company numbers in the same way:
+
+```{r extract company num}
+#Company numbers are 8 characters - either 8 digits, or 2 letters followed by 8 digits
+notices.liquidators$companynum <- stringr::str_extract(notices.liquidators$Abstract,"Company Number:* [0-9A-Z]{0,2}[0-9]{6,8}")
+sum(is.na(notices.liquidators$companynum))
+write.csv(notices.liquidators, "notices.liquidators.csv")
+```
+
+That's quite a high hit rate.
+
+Let's try to extract different types of addresses:
+
+```{r extract company address}
+#A few lines have Company Address; - mainly those without company numbers
+notices.liquidators$companyadd <- stringr::str_extract(notices.liquidators$Abstract,"Company Address;*.*")
+sum(is.na(notices.liquidators$companyadd))
+#Registered office is more common
+notices.liquidators$regoffice <- stringr::str_extract(notices.liquidators$Abstract,"Registered office:*.*")
+sum(is.na(notices.liquidators$regoffice))
+#Principal trading address:
+notices.liquidators$tradingaddress <- stringr::str_extract(notices.liquidators$Abstract,"Principal trading address:*.*")
+sum(is.na(notices.liquidators$tradingaddress))
+#Export again
+write.csv(notices.liquidators, "notices.liquidators.csv")
+```
+
+And other info:
+
+```{r extract info}
+notices.liquidators$businesstype <- stringr::str_extract(notices.liquidators$Abstract, "Nature of Business: .* Type of|Nature of Business: .* Registered")
+notices.liquidators$typeofliq <- stringr::str_extract(notices.liquidators$Abstract, "Type of Liquidation:.*")
+```
+
+
+The registered office regex also grabs the principal trading address but we can remove that like this:
+
+```{r remove principal trading address}
+notices.liquidators$regoffice <- gsub("Principal t.*", "", notices.liquidators$regoffice)
+```
+
+We can use the same technique to clean up other columns:
+
+```{r gsub to clean}
+notices.liquidators$businesstype <- gsub("Nature of Business: ","", notices.liquidators$businesstype)
+notices.liquidators$businesstype <- gsub("Type of","", notices.liquidators$businesstype)
+#Remove the Registered address part
+notices.liquidators$businesstype <- gsub(" Registered","", notices.liquidators$businesstype)
+
+notices.liquidators$typeofliq <- gsub("Type of Liquidation:", "", notices.liquidators$typeofliq)
+#Remove the Registered address part
+notices.liquidators$typeofliq <- gsub("Reg.*", "", notices.liquidators$typeofliq)
+#Remove Date of appointment
+notices.liquidators$typeofliq <- gsub("Date.*", "", notices.liquidators$typeofliq)
+#Remove Trading name
+notices.liquidators$typeofliq <- gsub("Trading.*", "", notices.liquidators$typeofliq)
+#Remove Previous name
+notices.liquidators$typeofliq <- gsub("Previous.*", "", notices.liquidators$typeofliq)
+#Remove Liquidator's name
+notices.liquidators$typeofliq <- gsub("Liquidato.*", "", notices.liquidators$typeofliq)
+#Remove Company Number
+notices.liquidators$typeofliq <- gsub("Company N.*", "", notices.liquidators$typeofliq)
+#Remove Name of Company: 
+notices.liquidators$typeofliq <- gsub("Name of.*", "", notices.liquidators$typeofliq)
+
+notices.liquidators$regoffice <- gsub("Registered office: ", "", notices.liquidators$regoffice)
+notices.liquidators$tradingaddress <- gsub("Principal trading address: ", "", notices.liquidators$tradingaddress)
+notices.liquidators$companyadd <- gsub("Company Address;", "", notices.liquidators$companyadd)
+#With the company numbers we also trim white space
+notices.liquidators$companynum <- gsub("Company Number:", "", notices.liquidators$companynum)
+notices.liquidators$companynum <- trimws(notices.liquidators$companynum)
+#Export
+write.csv(notices.liquidators, "notices.liquidators.csv")
+```
+
+
+
+We can also convert the postcode to a postcode district by splitting on the space
+
+```{r split on space liq}
+#see https://stackoverflow.com/questions/4350440/split-data-frame-string-column-into-multiple-columns
+notices.liquidators$district <- stringr::str_split_fixed(notices.liquidators$postcode, " ", 2)
+```
+
+Let's clean up the files before we move on
+
+```{r}
+#Store a list of all files
+list = ls()
+#Show that
+list
+#Remove them
+rm(list = ls())
+```
+
+
+
+## Using the detail pages
+
+Because we are lacking information on the search results pages, we need to scrape the detail pages for fuller data. That is covered in a second notebook.

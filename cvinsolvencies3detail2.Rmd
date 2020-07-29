@@ -1,0 +1,227 @@
+---
+title: "Insolvencies - dealing with detail pages 2"
+output: html_notebook
+---
+
+# Insolvencies
+
+We've already combined some detail scrapes from April 9.
+
+This notebook details the process of cleaning up a second scrape from May 23.
+
+NOTE: for convenience the files are in the 'gazettescrapeMay23' folder and need to be moved out before running the code below.
+
+They won't import as tsv files so need to be opened in Excel and saved as csv first.
+
+## Combining the data
+
+We had to download the scrapes in parts, so we need to recombine them.
+
+```{r install rio}
+library("rio")
+```
+
+
+```{r import and combine gazette}
+
+#Import each dataset
+notices23m1 <- rio::import("23mayScrape0-24999.csv")
+notices23m2 <- rio::import("23mayScrape25000-49999.csv")
+notices23m3 <- rio::import("23mayScrape50000-74999.csv")
+notices23m4 <- rio::import("23mayScrape75000-103000.csv")
+```
+
+We can see that each has a different number of columns, so we need to remove some in order to combine.
+
+```{r show colnames}
+head(colnames(notices23m1),30)
+```
+
+Column 18 is where we get extra info we can remove:
+
+
+And compare again:
+
+```{r}
+head(colnames(notices23m1),30)
+head(colnames(notices23m2),30)
+```
+
+
+
+The first 17 match, and those are fine - let's just keep those:
+
+```{r reduce to first 19 cols}
+notices23m1 <- notices23m1[,1:17]
+notices23m2 <- notices23m2[,1:17]
+notices23m3 <- notices23m3[,1:17]
+notices23m4 <- notices23m4[,1:17]
+```
+
+Check matches
+
+```{r check cols match}
+colnames(notices23m1) == colnames(notices23m2)
+colnames(notices23m2) == colnames(notices23m3)
+colnames(notices23m3) == colnames(notices23m4)
+```
+
+
+
+And combine
+
+```{r}
+#Add another
+notices23m <- rbind(notices23m1,notices23m2,notices23m3,notices23m4)
+
+```
+
+And export:
+
+```{r}
+write.csv(notices23m,"notices23m.csv")
+```
+
+## Filtering data
+
+We grabbed everything in the scrape but we only need a certain type of insolvency notice.
+
+```{r}
+corporateinsolvencies <- subset(notices23m, notices23m$Category == "Corporate Insolvency")
+```
+
+```{r}
+write.csv(corporateinsolvencies,"corporateinsolvencies.csv")
+```
+
+## Clean to match previous scrape export
+
+We need to get the data in the same shape as the other file. Here's the current data shape:
+
+```{r check col names}
+colnames(corporateinsolvencies)
+```
+
+And the previous, bigger, import:
+
+```{r import noticesdetail}
+noticesdetail <- rio::import("noticesdetail.csv")
+colnames(noticesdetail)
+head(noticesdetail)
+```
+
+We need to change the first column so it matches and makes sense:
+
+```{r change col name1 }
+colnames(corporateinsolvencies)[1] <- "index"
+colnames(noticesdetail)[1] <- "index"
+colnames(corporateinsolvencies)
+```
+
+We also need to remove that error column:
+
+```{r Remove error column}
+#Remove error column
+corporateinsolvencies <- corporateinsolvencies[,-3]
+colnames(corporateinsolvencies)
+colnames(noticesdetail)
+```
+
+And rename the Id column so it matches:
+
+```{r rename Id.1 col}
+colnames(corporateinsolvencies)[7] <- "Id"
+#Compare colnames again
+colnames(corporateinsolvencies)
+colnames(noticesdetail)
+
+```
+
+Now the first 9 cols of our new data matches the 9 cols of the previous data, so we reduce to those 9, and check the names match:
+
+```{r reduce to 9 cols}
+#Reduce to first 9 cols
+corporateinsolvencies <- corporateinsolvencies[,1:9]
+#Check column names match
+colnames(corporateinsolvencies) == colnames(noticesdetail)
+```
+
+## Create a version where each company appears only once
+
+As before, we don't want to double-count companies that appear more than once, so let's create a dataset where each appears once:
+
+```{r unique by company}
+#First remove the duplicates
+corpinsolvencies.compuniq <- corporateinsolvencies %>% dplyr::distinct(Companynum, .keep_all = T)
+#export
+write.csv(corpinsolvencies.compuniq, "corpinsolvencies_compuniq.csv")
+```
+
+
+We can then merge:
+
+```{r merge old and new data}
+corpinsolvencies2019to2020may <- rbind(corpinsolvencies.compuniq, noticesdetail)
+corpinsolvencies2019to2020may <- corpinsolvencies2019to2020may %>% dplyr::distinct(Companynum, .keep_all = T)
+write.csv(corpinsolvencies2019to2020may,"corpinsolvencies2019to2020may.csv")
+```
+
+
+## Subset to liquidator apps
+
+We also need to focus on one notice type:
+
+```{r show breakdown of categories}
+#Create a table of categories and convert to data frame
+noticetypes1 <- data.frame(table(corporateinsolvencies$Noticetype))
+#Sort by frequency desc
+noticetypes <- noticetypes %>% arrange(desc(Freq))
+#Show
+noticetypes
+#export
+#write.csv(categories, "categories.csv")
+```
+
+
+As in the previous scrape, liquidator appointments are top. Let's drill down to those.
+
+```{r subset liquidator appointments}
+noticesliquidators2 <- subset(corporateinsolvencies, corporateinsolvencies$Noticetype == "Appointment of Liquidators")
+write.csv(noticesliquidators2, "noticesliquidators2.csv")
+```
+
+
+## Merge (liquidator) notices from this scrape and last one
+
+Let's try to get both files merged. First, import the older scrape.
+
+```{r import older liq scrape}
+noticesliquidators1 <- rio::import("noticesliquidators.csv")
+colnames(noticesliquidators1)
+```
+
+The columns are slightly different
+
+```{r}
+colnames(noticesliquidators2)
+```
+
+Let's remove the 'error' field and the 'id' field (just an index):
+
+```{r}
+noticesliquidators2 <- noticesliquidators2[,-3]
+noticesliquidators2 <- noticesliquidators2[,-1]
+colnames(noticesliquidators2)
+```
+
+We can also remove source URL because 'Id.1' is the Linkid:
+
+```{r}
+noticesliquidators2 <- noticesliquidators2[,-1]
+colnames(noticesliquidators2)
+```
+
+```{r}
+colnames(noticesliquidators1)
+```
+

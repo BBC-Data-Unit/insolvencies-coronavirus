@@ -1,0 +1,96 @@
+---
+title: "Insolvencies - dealing with detail pages"
+output: html_notebook
+---
+
+# Insolvencies
+
+In the first notebook we combined, cleaned and analysed scraped [corporate insolvency notices](https://m.thegazette.co.uk/insolvency?categorycode=G205010000&results-page=1) on the Gazette. 
+
+We realised that scraping the detail pages for each notice was going to be needed. 
+
+So, in this notebook, we will combine those scrapes and perform some cleaning and analysis.
+
+NOTE: for convenience the files are in the 'gazettescrapeApr9' folder and need to be moved out before running the code below.
+
+## Combining the data
+
+We had to download the scrapes in parts, so we need to recombine them.
+
+```{r import and combine gazette}
+library("rio")
+#Import each dataset
+noticesdetail <- rio::import("gazette20k_scrape.csv")
+noticespart2 <- rio::import("gazette_next22k_scraped.csv")
+noticespart3 <- rio::import("to15apr_detail.csv")
+```
+
+We can see that each has a different number of columns, so we need to remove some in order to combine.
+
+```{r show colnames}
+colnames(noticespart3)
+```
+
+Column 20 is where we get extra info we can remove:
+
+```{r show 20th col}
+colnames(noticespart3)[20]
+```
+
+What about the second part:
+
+```{r}
+head(colnames(noticespart2),30)
+```
+
+Let's get rid of that error column:
+
+```{r}
+noticespart2 <- noticespart2[,-2]
+```
+
+And compare again:
+
+```{r}
+head(colnames(noticespart2),30)
+head(colnames(noticespart3),30)
+```
+
+There's still some mismatch.
+
+Let's just focus on the columns we need.
+
+Check which ones match
+
+```{r}
+colnames(noticesdetail) == colnames(noticespart2)
+colnames(noticespart2) == colnames(noticespart3)
+colnames(noticesdetail) == colnames(noticespart3)
+```
+
+The first 8 match, and those are fine - let's just keep those:
+
+```{r reduce to first 19 cols}
+noticespart3 <- noticespart3[,1:8]
+noticesdetail <- noticesdetail[,1:8]
+noticespart2 <- noticespart2[,1:8]
+```
+
+
+
+
+And combine
+
+```{r}
+#Add another
+noticesdetail <- rbind(noticesdetail,noticespart2)
+
+```
+
+And export:
+
+```{r}
+write.csv(noticesdetail,"noticesdetail.csv")
+```
+
+
