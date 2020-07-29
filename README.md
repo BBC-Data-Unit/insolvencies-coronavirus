@@ -50,4 +50,5 @@ Stories written by local news partners using this data release included:
 * Northampton Chronicle and Echo: [Fears over Northampton businesses going insolvent after being kept afloat by government during coronavirus lockdown](https://www.northamptonchron.co.uk/business/fears-over-northampton-businesses-going-insolvent-after-being-kept-afloat-government-during-coronavirus-lockdown-2926700) *29 July 2020*
 * SpiritFM: [More businesses go under in West Sussex during coronavirus lockdown](https://www.spiritfm.net/news/sussex-news/3151746/more-businesses-go-under-in-west-sussex-during-coronavirus-lockdown/) *29 July 2020*
 * The Scotland Herald: [Experts warn coronavirus crisis is creating 'zombie' firms](https://www.heraldscotland.com/business_hq/18613732.fall-insolvencies-amid-virus-crisis-masks-problem-zombie-companies/) *29 July 2020*
+* Yorkshire Live: [The incredible stats that show the true economic impact of Covid-19 on Kirklees business so far](https://www.examinerlive.co.uk/news/west-yorkshire-news/incredible-stats-show-true-economic-18663688) *28 July 2020*
 
