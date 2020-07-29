@@ -1,0 +1,108 @@
+---
+title: "Creating_shared_dataset"
+author: "Anna Khoo"
+date: "16 July 2020"
+output: html_document
+---
+How we created the shared dataset from the 'parent' database:
+
+```{r setup}
+.libPaths("D:/R/Libraries")
+pacman::p_load(tidyverse, zoo, ggplot2, janitor, rio, data.table, reticulate)
+```
+
+First, import the finished sheet from insolvency_master. That is, gazette notices from Jan '19, matched to Companies House and local authority area by registered office postcode (chg_postcode_la).
+We don't need the industry specification for this output, we're just looking at comparison over time and location, so we'll use 'wide' stage with one observation per notice, chg_postcode_la, rather than the full version allowing for duplication over industry type (which would distort time analysis).
+
+```{r import matched data, chg_postcode_la}
+chg_postcode_la <- read_csv("chg_postcode_la.csv")
+```
+What we're aiming for is local authority/notices in time period 2019/notices in lockdown/comparison column.
+First we want two subsets for those time periods. like in the national level time analysis script:
+```{r select comparison periods}
+#we want notices after lockdown, but not including July, as that month is incomplete:
+la_2020 <- chg_postcode_la %>% 
+  filter(date>"2020-03-23", date<"2020-07-01")
+#corresponding period last year, accounting for weekends, is two days 'ahead' because of leap-year
+#weekends do affect frequency of notices as none are filed on Gazette at weekends.
+la_2019 <- chg_postcode_la %>%
+  filter(year=="2019") %>% 
+  filter(date>"2019-03-25", date<"2019-07-03")
+
+#Now we want to pivot those two objects to summarise by count of notices, and then join them into one comparison table:
+
+#we'll keep laua code in here because that's useful for joining on region later
+la_2020 <- la_2020 %>% 
+  count(laua, LA_name, sort=T) %>% 
+  rename(notices_in_lockdown=n)
+la_2019 <- la_2019 %>% 
+  count(laua, LA_name, sort=T) %>% 
+  rename(notices_compare_2019=n)
+#non-values for either list may result in lost obs so full_join here:
+la_compare_lockdown <- full_join(la_2020, la_2019)
+#note we've still lost some councils that don't appear in either list, but that's okay
+#there are 3 of them: anti_join((count(chg_postcode_la, LA_name, laua)),la_compare_lockdown)
+
+#NA values are in essence a 0 record, so we'll add that in
+la_compare_lockdown <- la_compare_lockdown %>% 
+  mutate_at(c("notices_in_lockdown","notices_compare_2019"), ~replace(., is.na(.), 0))
+```
+We want a comparison column to get an idea of increase/decrease.
+```{r}
+la_compare_lockdown <- la_compare_lockdown %>% 
+  mutate(percentage_change = (notices_in_lockdown-notices_compare_2019)/notices_compare_2019*100) %>% 
+  arrange(desc(percentage_change))
+#now the Inf are skewing that rather, but it's useful to have the 0s in, so we'll just change those values...
+la_compare_lockdown$percentage_change <-gsub("Inf",NA, la_compare_lockdown$percentage_change)
+#changing that is going to reformat the col as character, change it back and resort
+la_compare_lockdown$percentage_change <-as.numeric(la_compare_lockdown$percentage_change)
+la_compare_lockdown <- la_compare_lockdown %>%
+  arrange(desc(percentage_change))
+```
+Is that generally going up or down?
+What about regions?
+
+```{r}
+summary(la_compare_lockdown$percentage_change)
+plot(la_compare_lockdown$percentage_change)
+boxplot(la_compare_lockdown$percentage_change)
+```
+Most places have seen a slight increase in notices. But, notices are down overall:
+```{r check sum}
+sum(la_compare_lockdown$notices_in_lockdown)
+sum(la_compare_lockdown$notices_compare_2019)
+```
+Regions would be nice to add in. We've already cleaned up this match in the address analysis exploration script, so we just need to join here:
+```{r add region}
+region_to_ONS_laua <- read_csv("region_to_ONS_laua_2020.csv")
+region_to_ONS_laua <- region_to_ONS_laua %>% 
+  select(area_code,region_match) %>% 
+  distinct()
+
+la_compare_lockdown <- la_compare_lockdown %>% 
+  rename(area_code=laua)
+
+la_compare_lockdown <- left_join(la_compare_lockdown, region_to_ONS_laua, by="area_code") 
+
+#useful to know that area has lined up, but we don't need that:
+
+#la_compare_lockdown <- la_compare_lockdown %>% 
+  #select(1,6,2:5)
+```
+```{r quick look at regional pivot}
+#we know the data is heavily skewed, so we'll use median:
+region_pivot <- la_compare_lockdown %>% 
+  group_by(region_match) %>% 
+  summarise(median_percentage_change=median(percentage_change, na.rm = T)) %>%
+  arrange(desc(median_percentage_change))
+#One reason for why NI has a particularly sharp drop is NI courts are not taking any insolvency cases at all, apparently.
+```
+
+
+```{r export}
+require(openxlsx)
+export_list <- list("Local Authority level" = la_compare_lockdown, "Regional level" = region_pivot)
+write.xlsx(export_list, file = "la_insolvencies_to_share.xlsx")
+
+```
+

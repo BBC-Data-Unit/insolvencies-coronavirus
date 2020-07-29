@@ -1,0 +1,168 @@
+---
+title: "sector_analysis"
+output: html_document
+---
+
+This script is for exploring insolvency by sector, using the completed object chg_sic from insolvency_master.Rmd
+
+```{r setup, include=FALSE}
+.libPaths("D:/R/Libraries")
+pacman::p_load(tidyverse, zoo, ggplot2, janitor, rio, data.table, reticulate)
+```
+
+
+```{r import chg_sic and industry county in Feb 2020}
+chg_sic <- read_csv("chg_sic_new.csv")
+#industry_sum needs recalculating for new industry_desc...
+industry_sum <- read_csv("industry_ch_la_feb_active.csv")
+```
+```{r}
+#deduplicate industry desc over company number to avoid double counting where multiple sic codes match to the same broad sector:
+chg_sic_industry <- chg_sic[!duplicated(chg_sic[c(3,25)]),]
+sector_overview <- chg_sic_industry %>% 
+  count(industry_desc, month, year) %>% 
+  rename(insolvencies=n)
+industry_feb_census <- industry_sum %>% 
+  group_by(industry_desc) %>% 
+  summarise(industry_feb=sum(n, na.rm=T))
+sector_overview <- left_join(sector_overview, industry_feb_census)
+```
+```{r plot sector overview}
+lockdown = c("April", "May", "June")
+
+lockdown_liq <-chg_sic_industry  %>% 
+  filter(year==2020, month %in% lockdown)
+
+# count liq enterprises by industry category, as a proportion of all companies during lockdown months
+# NROW counts nrow for a vector, here unique(x)
+
+liq_biz_by_industry <- lockdown_liq %>% 
+  count(industry_desc, sort=T) %>% 
+  mutate(proportion=(n/NROW(unique(lockdown_liq$CompanyNumber)))*100) %>% 
+  adorn_totals("row")
+
+#the total checks that the sum is >100 per cent, so including multiple industry counts
+```
+```{r plot liq industry bar}
+#now plot
+
+liq_biz_by_industry <- liq_biz_by_industry %>% 
+  filter(!industry_desc=="Total")
+
+bars <- ggplot(liq_biz_by_industry, 
+                       aes(x=reorder(industry_desc,proportion), 
+                           y=proportion)) +
+  geom_bar(stat="identity")+
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))+
+  labs(title = "Enterprise deaths 2020", x="Broad industry group", y="Proportion of businesses liq notices since lockdown")+
+  coord_flip()
+bars
+
+write_csv(liq_biz_by_industry, "liq_biz_by_industry.csv")
+```
+
+```{r}
+lockdown <- c("April", "May", "June")
+
+sector_2020 <- sector_overview %>% 
+  filter(year==2020, month %in% lockdown) %>% 
+  group_by(industry_desc) %>% 
+  summarise(insolvencies_lockdown=sum(insolvencies, na.rm=T))
+
+sector_2019 <- sector_overview %>%
+  filter(year==2019, month %in% lockdown) %>% 
+  group_by(industry_desc) %>% 
+  summarise(insolvencies_2019=sum(insolvencies, na.rm=T))
+
+sector_compare <- left_join(sector_2020, sector_2019)
+
+#NA values are in essence a 0 record, so we'll add that in
+sector_compare <- sector_compare %>% 
+  mutate_at(c("insolvencies_lockdown","insolvencies_2019"), ~replace(., is.na(.), 0))
+
+sector_compare <- sector_compare %>% 
+  mutate(increase=(insolvencies_lockdown-insolvencies_2019)) %>% 
+  mutate(increase_prop=(increase/insolvencies_2019*100)) %>% 
+  mutate(rise=increase>0) %>% 
+  arrange(desc(increase_prop))
+```
+```{r}
+sector_normalised <- sector_overview %>% 
+  filter(year==2020, month %in% lockdown) %>% 
+  group_by(industry_desc, industry_feb) %>% 
+  summarise(insolvencies_lockdown=sum(insolvencies, na.rm=T)) %>% 
+  mutate(liq_prop_lockdown=(insolvencies_lockdown/industry_feb)*100) %>% 
+  arrange(desc(liq_prop_lockdown))
+
+sector_normalised <- left_join(sector_normalised, sector_2019)
+
+sector_normalised <- sector_normalised %>% 
+  mutate(liq_prop_2019=(insolvencies_2019/industry_feb)*100)
+
+```
+```{r plot}
+sector_overview$month <- factor(sector_overview$month, levels= month.name)
+sector_overview$year <- as.character(sector_overview$year)
+
+grouped_bars <- ggplot(sector_overview_plot, 
+                       aes(x = month, 
+                           y = insolvencies, 
+                           fill = year)) +
+  facet_wrap(~industry_desc, scales = "free")+
+  geom_bar(stat="identity", position = position_dodge2(preserve = "single")) +
+  geom_hline(yintercept = 0, size = 1, colour="#333333") +
+  scale_fill_manual(values = c("#1380A1", "#FAAB18","#8B0000"))+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+grouped_bars
+```
+Note this recent section is now redundant as chg_sic_new has a date column inherited through changes in insolvency_master script.
+Run analysis by exact date as normal from parent.
+
+```{DON'T RUN r redo with date as exact}
+library(lubridate)
+
+chg_sic_industry<- chg_sic_industry %>%
+  mutate(date=paste(day, month, year))
+
+chg_sic_industry <- chg_sic_industry %>% 
+  mutate(date = dmy(date))
+```
+
+```{r analysis by exact date}
+lockdown_liq <- chg_sic_industry  %>% 
+  filter(date>"2020-03-23")
+
+compare_2019_liq <- chg_sic_industry %>% 
+  filter(date>"2019-03-23", date<"2019-07-01")
+# count liq enterprises by industry category, as a proportion of all companies during lockdown months
+# NROW counts nrow for a vector, here unique(x)
+
+liq_biz_by_industry <- lockdown_liq %>% 
+  count(industry_desc, sort=T) %>% 
+  mutate(proportion_of_lockdown_liq=(n/NROW(unique(lockdown_liq$CompanyNumber)))*100) %>%
+  rename(lockdown_liq=n) %>% 
+  adorn_totals("row")
+
+compare_2019_liq_industry <- compare_2019_liq %>% 
+  count(industry_desc, sort=T) %>% 
+  mutate(proportion_of_2019_liq=(n/NROW(unique(compare_2019_liq$CompanyNumber)))*100) %>% 
+  rename(liq_2019=n) %>% 
+  adorn_totals("row")
+
+compare_lockdown_2019_liq <- left_join(liq_biz_by_industry, compare_2019_liq_industry, by="industry_desc")
+```
+
+```{r comparison cols added}
+#sharpest change in relative % of liq?
+compare_lockdown_2019_liq <- compare_lockdown_2019_liq %>% 
+  mutate(change_relative_prop=(proportion_of_lockdown_liq-proportion_of_2019_liq),
+         change_raw=(lockdown_liq-liq_2019),
+         change_prop=(change_raw/lockdown_liq)) %>% 
+  arrange(desc(change_prop))
+```
+
+```{r export}
+#write out
+write_csv(compare_lockdown_2019_liq, "sector_analysis.csv")
+```
+

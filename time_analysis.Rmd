@@ -1,0 +1,168 @@
+---
+title: "time_analysis"
+author: "Anna Khoo"
+date: "29 June 2020"
+output: html_document
+---
+This script is to look at the change in insolvency notices over time.
+To avoid double-counting due to mulitple industry/sector matches for around 4500 companies, we will use the 'wide' version of our Companies House-gazette notices data, object chg_postcode_la.
+
+Note, double counting will occur in long version of chg_sic around 4500 entries.
+we have to use the wide version, chg_postcode_la, to be able to summarise by count.
+```{r setup, include=FALSE}
+.libPaths("D:/R/Libraries")
+pacman::p_load(tidyverse, zoo, ggplot2, janitor, rio, data.table)
+chg_postcode_la <- read_csv("chg_postcode_la.csv")
+```
+
+```{r}
+pivot_mth_yr <- chg_postcode_la %>%
+  group_by(year, month) %>% 
+  summarise(insolvencies=n()) %>% 
+  arrange(month)
+
+pivot_mth_yr$month <- factor(pivot_mth_yr$month, levels= month.name)
+pivot_mth_yr$year <- as.character(pivot_mth_yr$year)
+
+grouped_bars <- ggplot(pivot_mth_yr, 
+                       aes(x = month, 
+                           y = insolvencies, 
+                           fill = year)) +
+  geom_bar(stat="identity", position = position_dodge2(preserve = "single")) +
+  geom_hline(yintercept = 0, size = 1, colour="#333333")+  
+  scale_fill_manual(values = c("#1380A1", "#FAAB18","#8B0000"))+
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))+
+  labs(title = "liquidation notices", x="Month", y="gazette notices count")
+grouped_bars
+```
+```{r}
+grouped_lines <- ggplot(pivot_mth_yr, 
+                       aes(x = month, 
+                           y = insolvencies, 
+                           group  = year))+
+  geom_line()+
+  geom_point()+
+  scale_fill_manual(values = c("#1380A1", "#FAAB18","#8B0000"))+
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))+
+  labs(title = "liquidation notices", x="Month", y="gazette notices count")
+grouped_lines
+
+#nb July data is incomplete in gazette, we only have July 1.
+```
+
+```{r}
+write_csv(pivot_mth_yr, "insolvency_over_time.csv")
+```
+```{DON'T RUN r this chunk moved into insolvency_master for central use}
+library(lubridate)
+
+chg_postcode_la <- chg_postcode_la %>%
+  mutate(date=paste(day, month, year))
+
+chg_postcode_la <- chg_postcode_la %>% 
+  mutate(date = dmy(date))
+#chg_postcode_la$date <- as.Date(with(chg_postcode_la, paste(year, month, day,sep="-")), "%Y-%m-%d")
+```
+
+```{r line with day for granularity (so as to show March did not fall off a cliff)}
+
+#create day-month variable and pivot on that and year
+chg_postcode_la <- chg_postcode_la %>% 
+  mutate(day_month = substr(date, 6,10))
+
+
+day_month_year <- chg_postcode_la %>%
+    filter(!year==2018) %>% 
+    group_by(day_month, year) %>% 
+    summarise(insolvencies=n())
+
+day_month_year$day_month <- as.factor(day_month_year$day_month)
+day_month_year$year <- as.character(day_month_year$year)
+
+time_series_lines <- ggplot(day_month_year, 
+                       aes(x = day_month, 
+                           y = insolvencies, 
+                           group=year,
+                          colour=year))+
+  geom_line()+
+  geom_point()+
+  scale_colour_manual(values = c("#1380A1","#8B0000")) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))+
+  labs(title = "liquidation notices", x="Date", y="gazette notices count")
+time_series_lines 
+```
+
+```{r more or less since lockdown?}
+
+#we can have a play around, checking agg number of notices compared between years
+after_lockdown <- chg_postcode_la %>% 
+  filter(date>"2020-03-31", date<"2020-07-01")
+#corresponding period last year, accounting for weekends, is two days 'ahead' because of leap-year if doing from lockdown
+compare_2019 <- chg_postcode_la %>%
+  filter(year=="2019") %>% 
+  filter(date<"2019-07-01", date>"2019-03-31")
+
+```
+
+```{r March looks high, how much of that is the latter end?}
+pivot_mth_yr <- chg_postcode_la %>%
+  filter(year==2020, month=="February"|month=="March") %>% 
+  group_by(year, month, day) %>% 
+  summarise(insolvencies=n())
+
+#pivot_mth_yr$month <- factor(pivot_mth_yr$month, levels= month.name)
+
+grouped_bars <- ggplot(pivot_mth_yr, 
+                       aes(x = day, 
+                           y = insolvencies, 
+                           fill=month)) +
+  geom_bar(stat="identity", position = position_dodge2(preserve = "single")) +
+  geom_hline(yintercept = 0, size = 1, colour="#333333")+ 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))+
+  labs(title = "liquidation notices", x="Day", y="gazette notices count")
+grouped_bars
+
+#don't run
+group_line <- ggplot(pivot_mth_yr, 
+                       aes(x = day, 
+                           y = insolvencies)) +
+  geom_line() +
+  geom_hline(yintercept = 0, size = 1, colour="#333333")+ 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))+
+  labs(title = "liquidation notices", x="Day", y="gazette notices count")
+group_line
+
+
+```
+Using house_gazette object to get a quick idea of size of liquidated businesses. house_gazette is made using the Insolvency_master.Rmd, the initial match between gazette liquidation notices and Companies House, which contains AccountCategory.
+(API call would take a while to fix and add in with that col but as a broad idea:)
+```{r house_gazette pivot over time by acc.category}
+
+#we just want company size indication, clean col/subset:
+house_gazette$Accounts.AccountCategory <- gsub("TOTAL EXEMPTION ", "",house_gazette$Accounts.AccountCategory)
+
+accounts <- c("FULL","GROUP","MEDIUM","NO ACCOUNTS FILED","SMALL", "DORMANT")
+
+pivot_mth_yr <- house_gazette %>%
+  #filter(year==2020) %>%
+  filter(Accounts.AccountCategory %in% accounts) %>% 
+  group_by(year, month, Accounts.AccountCategory) %>% 
+  summarise(insolvencies=n()) %>% 
+  arrange(month)
+
+
+pivot_mth_yr$month <- factor(pivot_mth_yr$month, levels= month.name)
+pivot_mth_yr$year <- as.character(pivot_mth_yr$year)
+
+grouped_bars <- ggplot(pivot_mth_yr, 
+                       aes(x = month, 
+                           y = insolvencies, 
+                           fill = year)) +
+  facet_wrap(~Accounts.AccountCategory, scales="free")+
+  geom_bar(stat="identity", position = position_dodge2(preserve = "single")) +
+  geom_hline(yintercept = 0, size = 1, colour="#333333")+  
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))+
+  labs(title = "liquidation notices", x="Month", y="gazette notices count")
+grouped_bars
+```
+

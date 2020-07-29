@@ -1,0 +1,227 @@
+---
+title: "Insolvency_address_analysis"
+output: html_document
+---
+
+This script is for exploring insolvency by area, using the completed object chg_sic from insolvency_master.Rmd
+
+
+```{r setup}
+.libPaths("D:/R/Libraries")
+pacman::p_load(tidyverse, zoo, ggplot2, janitor, rio, data.table, reticulate)
+```
+
+```{r count insolvencies by district and broad industry group}
+chg_sic <- read_csv("chg_sic_new.csv")
+address_pivot <- chg_sic %>% 
+  count(laua, LA_name,industry_desc,month,year,day, sort=F)
+```
+
+
+##Build Companies House by industry comparison sheet
+
+There are data on how many companies of a certain industry type operate per area from NOMIS and ONS.
+However, our insolvency data is summarised by office of registration through Companies House, not site of operation.
+It is more accurate to normalise internally than with a differently measured source.
+This part of the script has been run and is static (non-changing input), so save time by jumping to importing industry_sum:
+
+```{r companies house import, using February as oldest we have}
+Feb_CH <- fread("BasicCompanyDataAsOneFile-2020-02-01.csv",
+                   select=c(1:13,15,20,27:30,33))
+```
+```{r import postcode to la lookup sheet}
+postcode_to_ons_ref <- fread("NSPL_FEB_2020_UK.csv", select=c("pcds","laua"))
+postcode_to_ons_ref <- postcode_to_ons_ref %>% 
+  rename(postcode=pcds)
+```
+```{r count all companies of that type in companies house Feb as a guide to normalise against}
+#prep join to ch
+Feb_CH <- Feb_CH %>%
+  rename(postcode=RegAddress.PostCode) %>% 
+  filter(CompanyStatus=="Active")
+#memory conservation
+ch_postcode <- inner_join(Feb_CH, postcode_to_ons_ref)
+rm(Feb_CH)
+```
+
+```{r}
+la_name_to_ons_code <- read_csv("Local_Authority_Districts_December_2019_Names_and_Codes_in_the_United_Kingdom.csv")
+la_name_to_ons_code <- la_name_to_ons_code %>%
+  select(LAD19CD, LAD19NM) %>% 
+  rename("laua"=LAD19CD, "LA_name"=LAD19NM)
+ch_postcode_la <- left_join(ch_postcode, la_name_to_ons_code)
+rm(ch_postcode)
+
+```
+
+```{r}
+#naniar gives up here, ch is too big
+ch_long <- ch_postcode_la %>%
+   pivot_longer(cols=16:19, 
+               names_to = "sicfield",
+               values_to = "siccode",
+               names_prefix= "SICCode."
+      )
+
+rm(ch_postcode_la)
+ch_long <- ch_long %>% 
+  filter(!siccode=="") %>% 
+  filter(CompanyStatus=="Active")
+
+ch_long <- ch_long %>%
+  tidyr::separate(col=siccode, into=c("siccode","sicdesc"), sep=" - ")
+
+```
+Deep breath...
+```{r}
+ch_long$sicdiv <- substr(ch_long$siccode,1,2)
+#import ref
+sicdivs <- rio::import("sic2007_division_group_class.xls", sheet = 2)
+colnames(sicdivs) <- c("sicdiv","divisionname")
+
+ch_sic <- left_join(ch_long, sicdivs)
+```
+It worked! That's a huge file though. Best to pivot and save the result (because it won't change) just in case RAM tops out another day.
+
+```{r}
+industry_to_div <- read_csv("industry_to_div.csv", 
+    col_types = cols(division_top = col_skip()))
+
+industry_to_div$division_bottom <-  str_pad(industry_to_div$division_bottom,2,pad="0")
+industry_to_div <- industry_to_div %>% 
+  rename(sicdiv=division_bottom)
+ch_sic <- left_join(ch_sic, industry_to_div)
+```
+```{r write out to save time later}
+#deduplicate industry_desc over company number
+ch_sic  <- ch_sic[!duplicated(ch_sic[c(2,24)]),]
+#pivot and write out
+industry_sum <- ch_sic %>% 
+  count(LA_name,industry_desc, sort=F)
+write_csv(industry_sum, "industry_ch_la_feb_active.csv")
+```
+
+
+##Jump to here for address analysis
+
+```{r}
+#read in industry_sum object to save time if needed
+industry_sum <- read_csv("industry_ch_la_feb_active.csv")
+address_normalised <- left_join(address_pivot, industry_sum, by=c("LA_name", "industry_desc")) %>% 
+  rename(insolvencies=n.x, registered=n.y)
+```
+That's worked okay.
+Count is rather small though, so we'll tidy up and then aggregate 2019 vs since lockdown this year. Or something:
+
+```{r}
+
+#creating a new object to look at just insolvencies by area, no sector breakdown:
+
+lockdown <- c("April", "May", "June")
+
+address_lockdown <- address_normalised %>% 
+  filter(year==2020, month %in% lockdown) %>% 
+  group_by(LA_name) %>% 
+  summarise(insolvencies_lockdown=sum(insolvencies, na.rm=T))
+
+address_2019 <- address_normalised %>%
+  filter(year==2019, month %in% lockdown) %>% 
+  group_by(LA_name) %>% 
+  summarise(insolvencies_2019=sum(insolvencies, na.rm=T))
+
+address_compare <- left_join(address_lockdown, address_2019)
+
+#NA values are in essence a 0 record, so we'll add that in
+address_compare <- address_compare %>% 
+  mutate_at(c("insolvencies_lockdown","insolvencies_2019"), ~replace(., is.na(.), 0))
+
+address_compare <- address_compare %>% 
+  mutate(increase=(insolvencies_lockdown-insolvencies_2019)) %>%
+  mutate(increase_prop=(increase/insolvencies_2019*100)) %>% 
+  mutate(rise=increase>0) %>% 
+  arrange(desc(increase_prop))
+```
+```{r have insolvencies increased?}
+summary(address_compare$rise)
+```
+
+```{r rough idea, didn't tally, redid in dedicated script}
+#by sector
+sector_break <- address_compare %>% 
+  group_by(industry_desc) %>% 
+  summarise(increase=sum(increase, na.rm=T)) %>% 
+  arrange(desc(increase))
+
+sector_break_2 <- address_compare %>% 
+  group_by(industry_desc) %>% 
+  summarise(insolvencies_lockdown=sum(insolvencies_lockdown, na.rm=T)) %>% 
+  arrange(desc(insolvencies_lockdown))
+```
+
+We're going to use the region_to_ONS_laua sheet made using fill_down_region_fix.R
+This section is for record only, skip to next # section for regional analysis
+```{DON'T RUN r add in region lookup}
+region_to_ONS_laua <- read_csv("D:/R/Anna R scripts/Working Directories/Business_floorspace/region_to_ONS_laua.csv")
+```
+
+```{DON'T RUN r join to region}
+address_pivot <- address_pivot %>% 
+  rename(area_code=laua) %>% 
+  left_join(region_to_ONS_laua)
+```
+```{DON'T RUN r check quality of join}
+join_check <- address_pivot %>% 
+  filter(!is.na(area_code)) %>% 
+  filter(is.na(region_match)) %>% 
+  select(area_code, region_match, LA_name) %>% 
+  distinct()
+#write_csv(join_check, "join_to_fix_0.csv")
+```
+quicker just to add those in manually and read back in:
+```{DON'T RUN r}
+join_fix <- read_csv("join_to_fix.csv") %>% 
+  select(2,1,3) %>% 
+  rename(area=LA_name)
+region_to_ONS_laua <- rbind(region_to_ONS_laua, join_fix)
+#write out for use in future:
+write_csv(region_to_ONS_laua, "region_to_ONS_laua_2020.csv")
+```
+#Regional analysis
+```{r re-run}
+region_to_ONS_laua <- read_csv("region_to_ONS_laua_2020.csv")
+
+address_normalised <- address_normalised %>% 
+  rename(area_code=laua) %>% 
+  left_join(region_to_ONS_laua)
+```
+```{r pivot by region}
+insolvency_by_region <- address_normalised %>% 
+  group_by(region_match) %>% 
+  summarise(total_insolvencies=sum(insolvencies, na.rm=T)) %>% 
+  arrange(desc(total_insolvencies))
+
+insolvency_region_sector <- address_normalised %>% 
+  group_by(region_match, industry_desc) %>% 
+  summarise(total_insolvencies=sum(insolvencies, na.rm=T)) %>% 
+  arrange(desc(total_insolvencies))
+
+insolvency_region_time <- address_normalised %>%
+  group_by(region_match, month, year) %>% 
+  summarise(total_insolvencies=sum(insolvencies, na.rm=T)) %>% 
+  arrange(desc(total_insolvencies))
+
+insolvency_region_time$month <- factor(insolvency_region_time$month, levels= month.name)
+insolvency_region_time$year <- as.character(insolvency_region_time$year)
+
+grouped_bars <- ggplot(insolvency_region_time, 
+                       aes(x = month, 
+                           y = total_insolvencies, 
+                           fill=year)) +
+  facet_wrap(~region_match, scales = "free")+
+  geom_bar(stat="identity", position = position_dodge2(preserve = "single")) +
+  geom_hline(yintercept = 0, size = 1, colour="#333333") +
+  scale_fill_manual(values = c("#1380A1", "#FAAB18","#8B0000"))+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+grouped_bars
+```
+
