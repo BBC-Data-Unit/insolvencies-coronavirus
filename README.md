@@ -35,8 +35,8 @@ You can [find the briefing pack here with more on the methodology](https://docs.
 
 ## Scripts and code
 
-insolvencyscraper_gazetteSEQ.ipynb: Python script for scraping notices from the London Gazette
-insolvency_master.Rmd: R script for collating Gazette data and joining to Companies House for analysis
+* Python notebook: [Scraping the Gazette for insolvency notices (sequential)](https://github.com/BBC-Data-Unit/insolvencies-coronavirus/blob/master/insolvencyscraper_gazetteSEQ.ipynb): Python script for scraping notices from the London Gazette
+* [R script for collating Gazette data and joining to Companies House for analysis](insolvency_master.Rmd)
 
 
 ## Partner usage
