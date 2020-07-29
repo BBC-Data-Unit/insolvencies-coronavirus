@@ -45,6 +45,7 @@ Stories written by local news partners using this data release included:
 
 * Business Live: [State bail-outs keeping firms on life-support – but warnings more will soon start going under](https://www.business-live.co.uk/enterprise/small-and-medium-enterprises/state-bail-outs-keeping-firms-18667883) *28 July 2020*
 * Cornish Times: [Businesses in 'hibernation' could face greater challenges emerging from lockdown](http://www.cornish-times.co.uk/article.cfm?id=127523&headline=Businesses%20in%20%27hibernation%27%20could%20face%20greater%20challenges%20emerging%20from%20lockdown&sectionIs=news&searchyear=2020) *28 July 2020*
+* Lancashire and Morecambe Citizen: [East Lancashire insolvencies: Data reveals coronavirus impact](https://www.thelancasterandmorecambecitizen.co.uk/news/18613613.east-lancashire-insolvencies-data-reveals-coronavirus-impact/) *29 July 2020*
 * Lancashire Telegraph: [East Lancashire insolvencies: Data reveals coronavirus impact](https://www.lancashiretelegraph.co.uk/news/18613613.east-lancashire-insolvencies-data-reveals-coronavirus-impact/) *29 July 2020*
 * Eagle Radio: [More businesses go under in Surrey and Hampshire during coronavirus lockdown](https://www.eagleradio.co.uk/news/local-news/3151206/more-businesses-go-under-in-surrey-and-hampshire-during-coronavirus-lockdown/) *29 July 2020*
 * Get Surrey: [Number of Surrey businesses going bust doubled in lockdown](https://www.getsurrey.co.uk/news/surrey-news/number-surrey-businesses-going-bust-18678941)  *29 July 2020*
