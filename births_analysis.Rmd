@@ -1,0 +1,351 @@
+---
+title: "births_analysis"
+author: "Anna Khoo"
+date: "29 June 2020"
+output: html_document
+---
+
+This is a script to look at the sector breakdown of new enterprises registered on Companies House by incorporation date.
+It's a variant on the sic_match in Insolvency_master.Rmd, but runs off the latest snapshot on Companies House.
+Because snapshots are very large (4m rows), this script takes a while to run and needs a clear environment to give enough RAM.
+
+```{r setup, include=FALSE}
+.libPaths("D:/R/Libraries")
+pacman::p_load(tidyverse, janitor, data.table, zoo, ggplot2)
+```
+
+
+```{r load latest snapshot}
+snapshot_sic <- fread("BasicCompanyDataAsOneFile-2020-07-01/BasicCompanyDataAsOneFile-2020-07-01.csv",
+                  select=c(1:13,15,20,27:30,33))
+```
+We'll split by time now, because otherwise this stage has to be written in multiple times later on, it's very useful in all child objects.
+```{r split date - moved further up before join}
+snapshot_sic <- snapshot_sic %>%
+  tidyr::separate(col=IncorporationDate, into=c("day","month","year"), sep="/")
+```
+
+
+Now we run the sic_match function, written in full here for readability. We'll write out the resulting object to save time on analysis later if we want to skip creating it every time.
+
+
+```{r reshape to allow sic join}
+snapshot_sic_only <- snapshot_sic %>%
+  pivot_longer(cols=18:21, 
+               names_to = "sicfield",
+               values_to = "siccode",
+               names_prefix= "SICCode.",
+               values_drop_na=TRUE 
+  )
+
+#that's really big, so filter for siccodes that exist:
+snapshot_sic_only <- snapshot_sic_only %>% 
+  filter(!siccode=="")
+
+snapshot_sic_only <- snapshot_sic_only %>%
+  tidyr::separate(col=siccode, into=c("siccode","sicdesc"), sep=" - ")
+
+snapshot_sic_only$sicdiv <- substr(snapshot_sic_only$siccode,1,2)
+#import ref
+sicdivs <- rio::import("sic2007_division_group_class.xls", sheet = 2)
+colnames(sicdivs) <- c("sicdiv","divisionname")
+
+snapshot_sic_only <- left_join(snapshot_sic_only, sicdivs)
+
+industry_to_div <- industry_to_div <- readxl::read_excel("industry_to_div.xlsx", 
+    sheet = "industry_to_div") %>% 
+  select(-division_top)
+
+industry_to_div$division_bottom <-  str_pad(industry_to_div$division_bottom,2,pad="0")
+industry_to_div <- industry_to_div %>% 
+  rename(sicdiv=division_bottom)
+
+snapshot_sic_only <- left_join(snapshot_sic_only, industry_to_div)
+
+###
+
+write_csv(snapshot_sic_only, "snapshot_sic_only.csv")
+```
+
+#Run from csv possible from here:
+```{r read in snapshot matched to sic data}
+snapshot_sic_only <- read_csv("snapshot_sic_only.csv")
+```
+```{r deduplicate industry, plot by month/year}
+#deduplicate industry desc over company number to avoid double counting where multiple sic codes match to the same broad sector:
+snapshot_sic_new_industry  <- snapshot_sic_only [!duplicated(snapshot_sic_only[c(2,24)]),]
+```
+
+```{r pivot over time}
+pivot_mth_yr <- snapshot_sic_new_industry %>%
+  filter(year=="2019"|year=="2020") %>% 
+  group_by(year, month, industry_desc) %>% 
+  summarise(births=n()) %>% 
+  arrange(month)
+
+grouped_bars <- ggplot(pivot_mth_yr, 
+                       aes(x = month, 
+                           y = births, 
+                           fill = year)) +
+  facet_wrap(~industry_desc, scales="free")+
+  geom_bar(stat="identity", position = position_dodge2(preserve = "single")) +
+  geom_hline(yintercept = 0, size = 1, colour="#333333") +
+  scale_fill_manual(values = c("#1380A1", "#FAAB18","#8B0000"))+
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))+
+  labs(title = "Enterprise births 2020", x="Month", y="Incorporated on CH")
+grouped_bars
+```
+```{r write out pivot - raw is too big to load outside of R}
+#using raw sheet NOT industry matched sheet for basic figures over time to avoid duplication over industry type per company
+pivot_mth_yr <- snapshot_sic %>%
+  filter(year=="2019"|year=="2020") %>% 
+  group_by(year, month) %>% 
+  summarise(births=n()) %>% 
+  arrange(month)
+
+write_csv(pivot_mth_yr, "births_over_time_core.csv")
+```
+
+```{r create normalised industry pivot for snapshot_sic_new}
+
+lockdown = c("04", "05", "06")
+
+lockdown_new <- snapshot_sic_new_industry %>% 
+  filter(year==2020, month %in% lockdown)
+
+# count new enterprises by industry category, as a proportion of all companies set up during lockdown months
+# NROW counts nrow for a vector, here unique(x)
+
+new_biz_by_industry <- lockdown_new %>% 
+  count(industry_desc, sort=T) %>% 
+  mutate(proportion=(n/NROW(unique(lockdown_new$CompanyNumber)))*100) %>% 
+  adorn_totals("row")
+
+write_csv(new_biz_by_industry, "new_biz_by_industry.csv")
+
+#the total checks that the sum is >100 per cent, so including multiple industry counts
+```
+```{r plot new industry bar}
+#now plot
+
+new_biz_by_industry <- new_biz_by_industry %>% 
+  filter(!industry_desc=="Total")
+
+bars <- ggplot(new_biz_by_industry, 
+                       aes(x=reorder(industry_desc,proportion), 
+                           y=proportion)) +
+  geom_bar(stat="identity")+
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))+
+  labs(title = "Enterprise births 2020", x="Broad industry group", y="Proportion of new businesses registered since lockdown")+
+  coord_flip()
+bars
+
+```
+Interesting...what about sic division then, so one level of industry down:
+
+```{r DON'T RUN moving this higher up in main script}
+snapshot_sic_only <- snapshot_sic_only %>%
+  tidyr::separate(col=IncorporationDate, into=c("day","month","year"), sep="/")
+```
+```{r fastest growing sic division?}
+
+lockdown = c("04", "05", "06")
+
+lockdown_new_div <- snapshot_sic_only %>% 
+  filter(year==2020, month %in% lockdown)
+
+#sub out sicdesc here for more granular look, retail shopping is highest, NSS
+
+new_biz_by_div <- lockdown_new_div %>% 
+  count(sicdesc, sicdiv, sort=T) %>% 
+  mutate(proportion=(n/NROW(unique(lockdown_new_div$CompanyNumber)))*100) %>% 
+  head(20) %>% 
+  adorn_totals("row")
+
+#now plot
+
+new_biz_by_div <- new_biz_by_div %>% 
+  filter(!sicdesc=="Total")
+
+bars <- ggplot(new_biz_by_div, 
+                       aes(x=reorder(sicdesc,proportion), 
+                           y=proportion)) +
+  geom_bar(stat="identity")+
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))+
+  scale_colour_manual("#1380A1")+
+  labs(title = "Enterprise births 2020", x="Industry division", y="Proportion of new businesses registered since lockdown")+
+  coord_flip()
+bars
+
+write_csv(new_biz_by_div, "new_biz_by_desc.csv")
+```
+
+What about births by registered office address?
+Using main snapshot_sic object here to avoid duplication issues in snapshot_sic_new_industry over industry type.
+```{r attempt breakdown by area}
+postcode_to_ons_ref <- fread("NSPL_FEB_2020_UK.csv", select=c("pcds","laua"))
+postcode_to_ons_ref <- postcode_to_ons_ref %>% 
+  rename(postcode=pcds)
+snapshot_sic<- snapshot_sic %>%
+  rename(postcode=RegAddress.PostCode)
+snapshot_sic <- left_join(snapshot_sic, postcode_to_ons_ref)
+```
+```{r bind to la and pivot}
+la_name_to_ons_code <- read_csv("Local_Authority_Districts_December_2019_Names_and_Codes_in_the_United_Kingdom.csv")
+
+#names(la_name_to_ons_code)
+la_name_to_ons_code <- la_name_to_ons_code %>%
+  select(LAD19CD, LAD19NM) %>% 
+  rename("laua"=LAD19CD, "LA_name"=LAD19NM)
+
+#subset by time
+lockdown = c("04", "05", "06")
+lockdown_new <- snapshot_sic %>% 
+  filter(year==2020, month %in% lockdown)
+
+#join
+lockdown_new <- left_join(lockdown_new, la_name_to_ons_code)
+
+#check for non-matches
+find_na_LA <- lockdown_new %>% 
+  filter(is.na(LA_name))
+#another one lost, others are carried nas from postcode match fail
+
+#Pivot by area (but this is not particularly helpful, we need to normalise)
+la_pivot <- lockdown_new %>% count(LA_name, sort=T)
+
+#now 
+#note this will overwrite version created by original script 'postcode_matching.R'
+write_csv(la_pivot, "new_by_district.csv")
+```
+
+#Fixing NEC
+n.e.c is distorting the entertainment bar, although technically included.
+We'll find out how many there are of those and how many matches we might have to redo, sic range etc:
+```{r find n.e.c}
+find_nec <- lockdown_new_div %>%
+  filter(str_detect(sicdesc, "n.e.c"))
+
+find_90s <- lockdown_new_div %>% 
+  filter(industry_desc=="Arts, entertainment, recreation & other services")
+```
+Found quite a few. Have now changed the industry_div match table to split Arts/E/R and 'other services' in lookup.
+But we'll leave this here for record.
+
+
+```{r closer look at June newbies, flatten}
+June_new <- snapshot_sic_only %>% 
+  filter(year=="2020", month=="06") %>%
+  select(-siccode, -sicdiv, -sicdesc, -divisionname)
+
+#deduplicate industry desc over company number
+June_new <- June_new[!duplicated(June_new[c(2,20)]),]
+
+industry_June_new <- June_new %>% 
+  count(industry_desc, sort=T) %>% 
+  mutate(proportion=n/nrow(unique(June_new$CompanyNumber)))
+
+#to flatten, add this line:
+#pivot_wider(names_from = sicfield,
+              #values_from = industry_desc) %>%
+#unite(industry_desc_all,19:22, sep = ",", remove = TRUE, na.rm = T)
+
+  #mutate(industry_all = unique(sicfield))
+  
+```
+#Quality checks - for record
+
+The melting process may (possibly) have lost observations due to NA or blank in SicText.1 field in the pivot. We'll have a closer look:
+```{r check no SicText.1 obs lost in value_drop_na and filter}
+#this is high memory use, so careful now, check separately:
+
+snapshot_sic_all <- snapshot_sic %>%
+  pivot_longer(cols=16:19, 
+               names_to = "sicfield",
+               values_to = "siccode",
+               names_prefix= "SICCode."
+  )
+
+snapshot_sic_blank <- snapshot_sic_all %>% 
+  filter(sicfield=="SicText_1") %>% 
+  filter(is.na(siccode))
+
+snapshot_sic_blank <- snapshot_sic_all %>% 
+  filter(sicfield=="SicText_1") %>% 
+  filter(siccode=="")
+
+snapshot_sic_blank <- snapshot_sic_all %>% 
+  filter(sicfield=="SicText_1")
+
+#same number of obs as non-pivoted parent, no obs being lost
+```
+
+
+We need to check what the drop-off rate is for companies, so if we've lost any companies in the most recent snapshot that were on the database as newly incorporated in January/Feb, for example:
+```{r check backdated tally, load older snapshot}
+May_sic <- fread("BasicCompanyDataAsOneFile-2020-05-01/BasicCompanyDataAsOneFile-2020-05-01.csv",
+                  select=c(1:13,15,20,27:30,33))
+```
+```{r find older births}
+May_sic_new <- May_sic  %>%
+  tidyr::separate(col=IncorporationDate, into=c("day","month","year"), sep="/") %>% 
+  filter(year==2020, (month=="03"| month=="02"|month=="01"))
+
+#pivot and count:
+pivot_mth_yr_may <- May_sic_new %>%
+  group_by(year, month) %>% 
+  summarise(births=n()) %>% 
+  arrange(month)
+
+pivot_mth_yr_new <- snapshot_sic %>%
+  filter(year=="2020") %>% 
+  group_by(year, month) %>% 
+  summarise(births=n()) %>% 
+  arrange(month)
+
+check_losses <- left_join(pivot_mth_yr_new, pivot_mth_yr_may, by=c("year", "month"))
+#by subbing in we can check further back:
+#check_losses <- left_join(check_losses, pivot_mth_yr_apr, by=c("year", "month"))
+#check_losses <- left_join(check_losses, pivot_mth_yr_mar, by=c("year", "month"))
+
+```
+Birth count by month is very stable looking back, not identical but if anything, there are a few more companies known to be incorporated in a given month in the newer dataset rather than in the older snapshot, probably due to backdating.
+This means our births chart, kept to recent months, is a fair representation when run from the newest snapshot.
+
+#Attempting by company size
+
+
+Copying from time_analysis and adapting to find births by company size.
+We're particularly interested in retail/wholesale/motor trading as those are the resurgence spikes.
+```{r snapshot pivot over time by acc.category}
+
+#we just want company size indication, clean col/subset:
+snapshot_sic_new$Accounts.AccountCategory <- gsub("TOTAL EXEMPTION ", "",snapshot_sic_new$Accounts.AccountCategory)
+
+accounts <- c("FULL","GROUP","MEDIUM","NO ACCOUNTS FILED","SMALL", "DORMANT")
+
+pivot_mth_yr <- snapshot_sic_new %>%
+  filter(year==2020) %>%
+  filter(Accounts.AccountCategory %in% accounts) %>% 
+  group_by(year, month, Accounts.AccountCategory, industry_desc) %>% 
+  summarise(births=n()) %>% 
+  arrange(month)
+
+
+#pivot_mth_yr$month <- factor(pivot_mth_yr$month, levels= month.name)
+pivot_mth_yr$year <- as.character(pivot_mth_yr$year)
+
+grouped_bars <- ggplot(pivot_mth_yr, 
+                       aes(x = month, 
+                           y = births, 
+                           fill = year)) +
+  facet_wrap(~Accounts.AccountCategory, scales="free")+
+  geom_bar(stat="identity", position = position_dodge2(preserve = "single")) +
+  geom_hline(yintercept = 0, size = 1, colour="#333333") +
+  scale_fill_manual(values = c("#1380A1", "#FAAB18","#8B0000"))+
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))+
+  labs(title = "Enterprise births 2020", x="Month", y="Incorporated on CH")
+grouped_bars
+```
+So we can't look at size of new enterprise according to accounts - they won't file yet. Accounting timetables have also been relaxed under the Insolvency Act 2020.
+
