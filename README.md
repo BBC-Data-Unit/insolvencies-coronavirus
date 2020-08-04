@@ -43,6 +43,7 @@ You can [find the briefing pack here with more on the methodology](https://docs.
 
 Stories written by local news partners using this data release included:
 
+* Bournemouth Echo: [Number of company insolvencies in Bournemouth area revealed](https://www.bournemouthecho.co.uk/news/18626247.number-company-insolvencies-bournemouth-area-revealed/) *4 August 2020*
 * Business Live: [State bail-outs keeping firms on life-support – but warnings more will soon start going under](https://www.business-live.co.uk/enterprise/small-and-medium-enterprises/state-bail-outs-keeping-firms-18667883) *28 July 2020*
 * Cornish Times: [Businesses in 'hibernation' could face greater challenges emerging from lockdown](http://www.cornish-times.co.uk/article.cfm?id=127523&headline=Businesses%20in%20%27hibernation%27%20could%20face%20greater%20challenges%20emerging%20from%20lockdown&sectionIs=news&searchyear=2020) *28 July 2020*
 * Eagle Radio: [More businesses go under in Surrey and Hampshire during coronavirus lockdown](https://www.eagleradio.co.uk/news/local-news/3151206/more-businesses-go-under-in-surrey-and-hampshire-during-coronavirus-lockdown/) *29 July 2020*
