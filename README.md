@@ -48,6 +48,7 @@ Stories written by local news partners using this data release included:
 * Cornish Times: [Businesses in 'hibernation' could face greater challenges emerging from lockdown](http://www.cornish-times.co.uk/article.cfm?id=127523&headline=Businesses%20in%20%27hibernation%27%20could%20face%20greater%20challenges%20emerging%20from%20lockdown&sectionIs=news&searchyear=2020) *28 July 2020*
 * Eagle Radio: [More businesses go under in Surrey and Hampshire during coronavirus lockdown](https://www.eagleradio.co.uk/news/local-news/3151206/more-businesses-go-under-in-surrey-and-hampshire-during-coronavirus-lockdown/) *29 July 2020*
 * Get Surrey: [Number of Surrey businesses going bust doubled in lockdown](https://www.getsurrey.co.uk/news/surrey-news/number-surrey-businesses-going-bust-18678941)  *29 July 2020*
+* Harrow Times: [Rise in number of Watford companies going bust during lockdown](https://www.harrowtimes.co.uk/watfordnews/18625424.rise-number-watford-companies-going-bust-lockdown/) *3 August 2020*
 * Herefordshire Mercury: [The number of companies going bust nearly doubles in Hertfordshire during lockdown](https://www.hertfordshiremercury.co.uk/news/hertfordshire-news/number-companies-going-bust-nearly-4367609) *28 July 2020*
 * Hunts Post: [More than 300 new businesses set up in Huntingdonshire during lockdown](https://www.huntspost.co.uk/news/business/businesses-in-huntingdon-during-lockdown-1-6769975?action=login) *30 July 2020*
 * Irish News: [Northern Ireland 'may be facing an insolvency tsunami when courts reopen'](http://www.irishnews.com/business/2020/07/25/news/northern-ireland-may-be-facing-an-insolvency-tsunami-when-courts-reopen--2015512/?param=ds441rif44T) *28 July 2020*
@@ -62,6 +63,7 @@ Stories written by local news partners using this data release included:
 * SpiritFM: [More businesses go under in West Sussex during coronavirus lockdown](https://www.spiritfm.net/news/sussex-news/3151746/more-businesses-go-under-in-west-sussex-during-coronavirus-lockdown/) *29 July 2020*
 * The Scotland Herald: [Experts warn coronavirus crisis is creating 'zombie' firms](https://www.heraldscotland.com/business_hq/18613732.fall-insolvencies-amid-virus-crisis-masks-problem-zombie-companies/) *29 July 2020*
 * Worcester News: [232 new businesses registered in Worcester during lockdown](https://www.worcesternews.co.uk/news/18608865.232-new-businesses-registered-worcester-lockdown/) *27 July 2020*
+* Wigan Today: [Hundreds of new Wigan businesses launched amid Covid-19 challenges](https://www.wigantoday.net/business/hundreds-new-wigan-businesses-launched-amid-covid-19-challenges-2933994) *7 August 2020*
 * Yorkshire Live: [The incredible stats that show the true economic impact of Covid-19 on Kirklees business so far](https://www.examinerlive.co.uk/news/west-yorkshire-news/incredible-stats-show-true-economic-18663688) *28 July 2020*
 
 
