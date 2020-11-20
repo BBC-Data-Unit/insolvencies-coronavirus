@@ -65,6 +65,8 @@ Stories written by local news partners using this data release included:
 * Worcester News: [232 new businesses registered in Worcester during lockdown](https://www.worcesternews.co.uk/news/18608865.232-new-businesses-registered-worcester-lockdown/) *27 July 2020*
 * Wigan Today: [Hundreds of new Wigan businesses launched amid Covid-19 challenges](https://www.wigantoday.net/business/hundreds-new-wigan-businesses-launched-amid-covid-19-challenges-2933994) *7 August 2020*
 * Yorkshire Live: [The incredible stats that show the true economic impact of Covid-19 on Kirklees business so far](https://www.examinerlive.co.uk/news/west-yorkshire-news/incredible-stats-show-true-economic-18663688) *28 July 2020*
+* Birmingham Live: [Thousands of Birmingham businesses in financial distress - how to keep your company safe](https://www.birminghammail.co.uk/special-features/thousands-birmingham-businesses-financial-distress-18845133) *19 November 2020*
+
 
 
 ## Related repos
